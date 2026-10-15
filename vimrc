@@ -60,7 +60,15 @@ set wildmenu
 set mouse=a
 set backspace=indent,eol,start
 set scrolloff=3
-set termguicolors           " truecolor（onedark 主题需要）
+" truecolor 需终端支持（iTerm2/kitty/alacritty 等会设 $COLORTERM=truecolor）。
+" 不支持 truecolor 的终端（如 macOS Terminal.app）强开会导致 onedark 底色异常（全蓝），
+" 此时回退 256 色。
+if has('termguicolors') && exists('$COLORTERM') && $COLORTERM =~# 'truecolor\|24bit'
+    set termguicolors
+else
+    set notermguicolors
+    let g:onedark_termcolors = 256
+endif
 
 " ---- 缩进 ----
 set autoindent
