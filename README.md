@@ -9,6 +9,10 @@ my_env/
 ├── bashrc        # bash 配置（别名 / 历史 / 提示符 / git 别名）
 ├── vimrc         # vim 配置（基础设置 + vim-plug 插件）
 ├── install.sh    # 一键安装脚本
+├── autoload/     # rtl_align 对齐引擎
+├── plugin/       # rtl_align 命令定义
+├── ftplugin/     # SystemVerilog 缓冲区本地配置
+├── doc/          # 帮助文档（:help rtl_align）
 └── README.md
 ```
 
@@ -43,6 +47,18 @@ bash install.sh
 | `tpope/vim-surround` | 环绕引号/括号（`cs` / `ds` / `ys`） |
 | `jiangmiao/auto-pairs` | 自动配对括号 |
 
+## RTL 对齐插件（rtl_align，内置）
+
+自带的 SystemVerilog / Verilog 代码对齐插件（非 vim-plug 管理，`install.sh` 直接软链）。按列对齐 RTL 代码，幂等（重复执行结果不变）。
+
+- **命令**：`:RtlAlign`（对齐整个缓冲区）
+- **快捷键**：`,aa`（普通/可视模式，可视模式对齐选中块）
+- **标记**：`// @vlog-align`（信号声明块）、`// @inst`（例化块）、`// keep`（跳过该行）
+- module 声明（parameter + port 列表）自动对齐
+- 逗号行首风格（兼容行尾逗号输入，自动迁移）
+
+详见 `:help rtl_align`。
+
 ## 常用快捷键
 
 - **leader 键 = `,`**（逗号）
@@ -54,6 +70,7 @@ bash install.sh
 - `Ctrl+n`：开关文件树
 - `Ctrl+h/j/k/l`：分屏导航
 - `,l`：清除搜索高亮
+- `,aa`：RTL 代码对齐（可视模式对齐选中块）
 - `F4`：添加/更新文件头（vim-header）
 
 > 系统剪贴板（`Ctrl+c/x/v`）需 vim 编译时含 `+clipboard`；终端里 `Ctrl+s/q` 需 bash 已执行 `stty -ixon`（bashrc 已加）。文件头作者名放 `~/.vimrc_local` 里设 `g:header_field_author`。

@@ -17,6 +17,16 @@ echo "==> 下载 vim-plug（插件管理器）"
 curl -fLo "$HOME/.vim/autoload/plug.vim" --create-dirs \
     https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim
 
+echo "==> 安装 rtl_align 对齐插件（软链到 ~/.vim/）"
+for f in \
+    autoload/rtl_align.vim \
+    plugin/rtl_align.vim \
+    ftplugin/systemverilog.vim \
+    doc/rtl_align.txt ; do
+    mkdir -p "$HOME/.vim/$(dirname "$f")"
+    ln -sf "$REPO_DIR/$f" "$HOME/.vim/$f"
+done
+
 echo
 echo "==> 完成。"
 echo "    1) 重新打开终端或 source ~/.bashrc 让 bash 配置生效"
