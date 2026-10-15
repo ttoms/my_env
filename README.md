@@ -9,7 +9,8 @@ my_env/
 ├── bashrc        # bash 配置（别名 / 历史 / 提示符 / git 别名）
 ├── vimrc         # vim 配置（基础设置 + vim-plug 插件）
 ├── install.sh    # 一键安装脚本
-├── vim/          # rtl_align 对齐插件（autoload/plugin/ftplugin/doc）
+├── vim/
+│   └── rtl_align/             # rtl_align 对齐插件（autoload/plugin/ftplugin/doc）
 ├── skills/       # Claude Code skill
 │   └── rtl-developer/          # RTL 开发编排 skill
 │       ├── SKILL.md            # 编排：架构先行 → 开发 → 验证
@@ -55,7 +56,7 @@ bash install.sh
 
 ## RTL 对齐插件（rtl_align，内置）
 
-自带的 SystemVerilog / Verilog 代码对齐插件（非 vim-plug 管理，`install.sh` 直接软链）。按列对齐 RTL 代码，幂等（重复执行结果不变）。
+自带的 SystemVerilog / Verilog 代码对齐插件，通过 vim-plug 安装（vimrc 里 `Plug 'ttoms/my_env', { 'rtp': 'vim/rtl_align' }`）。按列对齐 RTL 代码，幂等（重复执行结果不变）。
 
 - **命令**：`:RtlAlign`（对齐整个缓冲区）
 - **快捷键**：`,aa`（普通/可视模式，可视模式对齐选中块）

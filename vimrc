@@ -33,6 +33,9 @@ Plug 'tpope/vim-surround'
 " 自动配对括号
 Plug 'jiangmiao/auto-pairs'
 
+" RTL 对齐插件（本仓库自带，rtp 指向子目录）
+Plug 'ttoms/my_env', { 'rtp': 'vim/rtl_align' }
+
 " 后续可选：
 " Plug 'junegunn/fzf.vim'                      " 模糊查找（需 fzf 二进制）
 " Plug 'neoclide/coc.nvim'                     " LSP 补全（需 node）
