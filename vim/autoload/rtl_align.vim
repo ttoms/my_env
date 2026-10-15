@@ -22,7 +22,7 @@ function! s:ceil4(n) abort
     return a:n + (4 - a:n % 4) % 4
 endfunction
 
-" 去掉行尾逗号（逗号行尾 → 行首迁移用）
+" 去掉行尾逗号
 function! s:strip_trailing_comma(line) abort
     return substitute(a:line, ',\s*$', '', '')
 endfunction

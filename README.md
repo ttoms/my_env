@@ -1,6 +1,6 @@
 # my_env
 
-个人开发环境配置：bash、vim（含插件）。跨机器复用，一次配置到处生效。
+个人开发环境：bash、vim（含插件）+ RTL 开发 skill/agent。跨机器复用，一次配置到处生效。
 
 ## 目录
 
@@ -9,10 +9,16 @@ my_env/
 ├── bashrc        # bash 配置（别名 / 历史 / 提示符 / git 别名）
 ├── vimrc         # vim 配置（基础设置 + vim-plug 插件）
 ├── install.sh    # 一键安装脚本
-├── autoload/     # rtl_align 对齐引擎
-├── plugin/       # rtl_align 命令定义
-├── ftplugin/     # SystemVerilog 缓冲区本地配置
-├── doc/          # 帮助文档（:help rtl_align）
+├── vim/          # rtl_align 对齐插件（autoload/plugin/ftplugin/doc）
+├── skills/       # Claude Code skill
+│   └── rtl-developer/          # RTL 开发编排 skill
+│       ├── SKILL.md            # 编排：架构先行 → 开发 → 验证
+│       ├── references/rtl-coding-standard.md   # 通用 RTL 编码规范
+│       └── scripts/quality_gate.py             # 质量门控脚本
+├── agents/       # Claude Code subagent
+│   ├── rtl-architect.md        # 架构师（方案）
+│   ├── rtl-developer.md        # 开发（实现）
+│   └── rtl-verifier.md         # 验证（TB+lint+sim+门控）
 └── README.md
 ```
 
@@ -55,9 +61,32 @@ bash install.sh
 - **快捷键**：`,aa`（普通/可视模式，可视模式对齐选中块）
 - **标记**：`// @vlog-align`（信号声明块）、`// @inst`（例化块）、`// keep`（跳过该行）
 - module 声明（parameter + port 列表）自动对齐
-- 逗号行首风格（兼容行尾逗号输入，自动迁移）
+- 逗号行首风格（兼容行尾逗号输入）
 
 详见 `:help rtl_align`。
+
+## RTL 开发 skill + subagent（Claude Code）
+
+通用 RTL 开发体系：一个编排 skill + 3 个 subagent，复杂模块架构先行。
+
+- **skill** `skills/rtl-developer/`：编排「架构师出方案 → 用户确认 → 开发实现 → 验证闭环」，自带编码规范 + 质量门控脚本
+- **agent** `agents/rtl-architect.md`（架构方案）/ `rtl-developer.md`（实现）/ `rtl-verifier.md`（验证）
+- **编码规范** `skills/rtl-developer/references/rtl-coding-standard.md`：命名/风格/对齐/寄存器例化/可综合性/质量门控
+
+### 安装到 Claude Code
+
+把 skill 和 agents 软链进 Claude Code 配置目录（`~/.claude/`）：
+
+```bash
+# skill（目录软链）
+ln -sf "$PWD/skills/rtl-developer" ~/.claude/skills/rtl-developer
+# agents（文件软链）
+ln -sf "$PWD/agents/rtl-architect.md"  ~/.claude/agents/rtl-architect.md
+ln -sf "$PWD/agents/rtl-developer.md"  ~/.claude/agents/rtl-developer.md
+ln -sf "$PWD/agents/rtl-verifier.md"   ~/.claude/agents/rtl-verifier.md
+```
+
+（本仓库用 `CC/skills`、`CC/agents` 软链到 `~/.claude/`，各机器按自己目录结构调整。）
 
 ## 常用快捷键
 
