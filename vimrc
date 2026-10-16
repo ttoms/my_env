@@ -137,7 +137,10 @@ if has("gui_running")
 endif
 
 " ---- 主题 ----
-colorscheme onedark
+" onedark 未安装时（首次 PlugInstall 前）不报 E185，静默跳过
+if !empty(globpath(&rtp, 'colors/onedark.vim'))
+    colorscheme onedark
+endif
 
 " ============================================================
 "  插件配置
