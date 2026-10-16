@@ -21,9 +21,17 @@ fi
 TS="$(date +%Y%m%d-%H%M%S)"
 
 backup() {
-    if [ -e "$1" ] || [ -L "$1" ]; then
-        echo "==> 备份 $1 → $1.bak.$TS"
-        mv "$1" "$1.bak.$TS"
+    local src="$1"
+    local bak="$1.bak.$TS"
+    if [ -L "$src" ]; then
+        # 软链：解引用备份目标内容，再删掉软链本体
+        echo "==> 备份软链 $src → $bak（解引用保留内容）"
+        cp -aL "$src" "$bak" 2>/dev/null || echo "    （悬空软链，无内容可备份）"
+        rm -rf "$src"
+    elif [ -e "$src" ]; then
+        # 普通文件/目录：改名即保留内容
+        echo "==> 备份 $src → $bak"
+        mv "$src" "$bak"
     fi
 }
 
