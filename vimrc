@@ -33,7 +33,8 @@ Plug 'tpope/vim-surround'
 " 自动配对括号
 Plug 'jiangmiao/auto-pairs'
 
-" rtl_align 对齐插件由 install.sh 直接复制到 ~/.vim/（原生加载，不占 vim-plug）
+" rtl_align 对齐插件（本仓库自带，install.sh 复制到 ~/.vim/plugged/rtl_align）
+Plug '~/.vim/plugged/rtl_align'
 
 " 后续可选：
 " Plug 'junegunn/fzf.vim'                      " 模糊查找（需 fzf 二进制）
