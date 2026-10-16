@@ -10,7 +10,8 @@ my_env/
 ├── vimrc         # vim 配置（基础设置 + vim-plug 插件）
 ├── install.sh    # 一键安装脚本
 ├── vim/
-│   └── rtl_align/             # rtl_align 对齐插件（autoload/plugin/ftplugin/doc）
+│   ├── rtl_align/             # rtl_align 对齐插件（autoload/plugin/ftplugin/doc）
+│   └── vendor/                # 第三方插件最新源码 + plug.vim（离线安装用）
 ├── skills/       # Claude Code skill
 │   └── rtl-developer/          # RTL 开发编排 skill
 │       ├── SKILL.md            # 编排：架构先行 → 开发 → 验证
@@ -28,16 +29,17 @@ my_env/
 ```bash
 git clone git@github.com:ttoms/my_env.git
 cd my_env
-bash install.sh
+bash install.sh              # 联网安装（vim-plug 从 GitHub 拉插件）
+bash install.sh --offline    # 离线安装（用 vim/vendor/ 打包的插件源码）
 ```
 
 `install.sh` 会：
 
-1. 软链 `bashrc` → `~/.bashrc`
-2. 软链 `vimrc` → `~/.vimrc`
-3. 下载 vim-plug 插件管理器到 `~/.vim/autoload/`
+1. 软链 `bashrc` → `~/.bashrc`、`vimrc` → `~/.vimrc`
+2. 联网：下载 vim-plug 并自动执行 `:PlugInstall` 装所有插件
+3. 离线（`--offline`，或联网失败自动降级）：直接把 `vim/vendor/` 里的插件源码拷到 `~/.vim/plugged/`
 
-装完启动 vim，执行 `:PlugInstall` 安装插件。
+> `vim/vendor/` 保存了所有 vim-plug 插件的**当前最新源码**，离线环境可脱离 GitHub 直接安装。
 
 ## 包含的 vim 插件
 

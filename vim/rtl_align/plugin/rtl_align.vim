@@ -5,6 +5,7 @@
 if exists('g:loaded_rtl_align') || &cp
     finish
 endif
+let g:loaded_rtl_align = 1
 
 command! RtlAlign call rtl_align#align_all()
 
