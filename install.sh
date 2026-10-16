@@ -4,7 +4,10 @@
 #  用法：
 #    bash install.sh              联网安装（vim-plug 从 GitHub 拉插件）
 #    bash install.sh --offline    离线安装（用 vim/vendor/ 打包的插件源码）
-#  说明：默认联网，联网失败时自动降级为离线模式
+#  说明：
+#    - 全部复制安装，不软链（my_env 目录删了也不影响）
+#    - 已存在的 ~/.bashrc / ~/.vimrc / ~/.vim 先加时间戳备份
+#    - 联网失败自动降级为离线模式
 # ============================================================
 set -e
 
@@ -14,11 +17,29 @@ if [ "$1" = "--offline" ] || [ "$1" = "-o" ]; then
     OFFLINE=1
 fi
 
-echo "==> 软链 bashrc → ~/.bashrc"
-ln -sf "$REPO_DIR/bashrc" "$HOME/.bashrc"
+TS="$(date +%Y%m%d-%H%M%S)"
 
-echo "==> 软链 vimrc → ~/.vimrc"
-ln -sf "$REPO_DIR/vimrc" "$HOME/.vimrc"
+backup() {
+    if [ -e "$1" ] || [ -L "$1" ]; then
+        echo "==> 备份 $1 → $1.bak.$TS"
+        mv "$1" "$1.bak.$TS"
+    fi
+}
+
+echo "==> 备份已存在的 ~/.bashrc / ~/.vimrc / ~/.vim（若有）"
+backup "$HOME/.bashrc"
+backup "$HOME/.vimrc"
+backup "$HOME/.vim"
+
+echo "==> 复制 bashrc → ~/.bashrc"
+cp "$REPO_DIR/bashrc" "$HOME/.bashrc"
+
+echo "==> 复制 vimrc → ~/.vimrc"
+cp "$REPO_DIR/vimrc" "$HOME/.vimrc"
+
+echo "==> 复制 rtl_align 插件到 ~/.vim/（原生加载）"
+mkdir -p "$HOME/.vim"
+cp -r "$REPO_DIR/vim/rtl_align/." "$HOME/.vim/"
 
 mkdir -p "$HOME/.vim/autoload" "$HOME/.vim/plugged"
 

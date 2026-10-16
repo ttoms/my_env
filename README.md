@@ -33,11 +33,13 @@ bash install.sh              # 联网安装（vim-plug 从 GitHub 拉插件）
 bash install.sh --offline    # 离线安装（用 vim/vendor/ 打包的插件源码）
 ```
 
-`install.sh` 会：
+`install.sh` 会（**全部复制，不软链**，my_env 目录删了也不影响）：
 
-1. 软链 `bashrc` → `~/.bashrc`、`vimrc` → `~/.vimrc`
-2. 联网：下载 vim-plug 并自动执行 `:PlugInstall` 装所有插件
-3. 离线（`--offline`，或联网失败自动降级）：直接把 `vim/vendor/` 里的插件源码拷到 `~/.vim/plugged/`
+1. 备份已存在的 `~/.bashrc` / `~/.vimrc` / `~/.vim`（加 `.bak.<时间戳>` 后缀）
+2. 复制 `bashrc` → `~/.bashrc`、`vimrc` → `~/.vimrc`
+3. 复制 `rtl_align` 插件到 `~/.vim/`（原生加载，不占 vim-plug）
+4. 联网：下载 vim-plug 并自动执行 `:PlugInstall` 装第三方插件
+5. 离线（`--offline`，或联网失败自动降级）：把 `vim/vendor/` 里的插件源码拷到 `~/.vim/plugged/`
 
 > `vim/vendor/` 保存了所有 vim-plug 插件的**当前最新源码**，离线环境可脱离 GitHub 直接安装。
 
@@ -121,4 +123,4 @@ export MX_APIKEY='xxx'                 # 私密 key
 
 ## 多机同步
 
-配置是纯文本 + symlink，改完 `git push`，其他机器 `git pull` 后重跑 `install.sh` 即可（`~/.bashrc_local` 各机各自维护，不随仓库同步）。
+配置是纯文本，改完 `git push`，其他机器 `git pull` 后重跑 `install.sh` 即可（`~/.bashrc_local` 各机各自维护，不随仓库同步）。

@@ -33,13 +33,7 @@ Plug 'tpope/vim-surround'
 " 自动配对括号
 Plug 'jiangmiao/auto-pairs'
 
-" RTL 对齐插件（本仓库自带，本地路径离线可用；~/.vimrc 软链到本仓库 vimrc）
-let s:my_env_dir = fnamemodify(resolve(expand('~/.vimrc')), ':h')
-if isdirectory(s:my_env_dir . '/vim/rtl_align')
-    execute "Plug '" . s:my_env_dir . "/vim/rtl_align'"
-else
-    Plug 'ttoms/my_env', { 'rtp': 'vim/rtl_align' }
-endif
+" rtl_align 对齐插件由 install.sh 直接复制到 ~/.vim/（原生加载，不占 vim-plug）
 
 " 后续可选：
 " Plug 'junegunn/fzf.vim'                      " 模糊查找（需 fzf 二进制）
