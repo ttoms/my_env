@@ -10,7 +10,8 @@ my_env/
 ├── vimrc         # vim 配置（基础设置 + vim-plug 插件）
 ├── install.sh    # 一键安装脚本
 ├── vim/
-│   └── vendor/                # 所有插件最新源码（含 rtl_align）+ plug.vim（离线安装用）
+│   ├── rtl_align/             # 自带 RTL 对齐插件
+│   └── vendor/                # 第三方插件最新源码 + plug.vim（离线安装用）
 ├── skills/       # Claude Code skill
 │   └── rtl-developer/          # RTL 开发编排 skill
 │       ├── SKILL.md            # 编排：架构先行 → 开发 → 验证

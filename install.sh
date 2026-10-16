@@ -43,7 +43,7 @@ mkdir -p "$HOME/.vim/autoload" "$HOME/.vim/plugged"
 # rtl_align 是本仓库自带插件，始终复制（不依赖网络）
 echo "==> 复制 rtl_align 插件（本仓库自带）"
 rm -rf "$HOME/.vim/plugged/rtl_align"
-cp -rf "$REPO_DIR/vim/vendor/rtl_align" "$HOME/.vim/plugged/rtl_align"
+cp -rf "$REPO_DIR/vim/rtl_align" "$HOME/.vim/plugged/rtl_align"
 
 # 判断安装模式
 MODE="online"
@@ -64,7 +64,6 @@ if [ "$MODE" = "offline" ]; then
     cp -f "$REPO_DIR/vim/vendor/plug.vim" "$HOME/.vim/autoload/plug.vim"
     for d in "$REPO_DIR"/vim/vendor/*/; do
         name="$(basename "$d")"
-        [ "$name" = "rtl_align" ] && continue   # 上面已复制
         rm -rf "$HOME/.vim/plugged/$name"
         cp -rf "$d" "$HOME/.vim/plugged/$name"
         echo "    bundled: $name"
