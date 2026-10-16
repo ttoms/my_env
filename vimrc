@@ -146,8 +146,14 @@ endif
 "  插件配置
 " ============================================================
 
-" NERDTree：Ctrl-n 开关
-nnoremap <C-n> :NERDTreeToggle<CR>
+" NERDTree
+nnoremap <C-n> :NERDTreeToggle<CR>              " 打开/关闭（Ctrl+n）
+nnoremap ff    :NERDTreeToggle<CR>              " 打开/关闭（ff）
+nnoremap <leader>nf :NERDTreeFind<CR>           " 定位当前文件到树
+nnoremap <leader>nr :NERDTreeRefreshRoot<CR>    " 刷新树
+
+" 只剩 NERDTree 窗口时退出 vim
+autocmd BufEnter * if winnr('$') == 1 && exists('b:NERDTree') && b:NERDTree.isTabTree() | quit | endif
 
 " airline：匹配 onedark
 let g:airline_theme = 'onedark'

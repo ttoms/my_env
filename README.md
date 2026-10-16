@@ -101,7 +101,9 @@ ln -sf "$PWD/agents/rtl-verifier.md"   ~/.claude/agents/rtl-verifier.md
 - `Ctrl+c` / `Ctrl+x`：复制 / 剪切（visual 模式）
 - `Ctrl+v`：粘贴
 - `Ctrl+q`：块选择（原 `Ctrl+v` 被粘贴占用）
-- `Ctrl+n`：开关文件树
+- `Ctrl+n` / `ff`：开关文件树（NERDTree）
+- `,nf`：定位当前文件到文件树
+- `,nr`：刷新文件树
 - `Ctrl+h/j/k/l`：分屏导航
 - `,l`：清除搜索高亮
 - `,aa`：RTL 代码对齐（可视模式对齐选中块）
