@@ -157,6 +157,10 @@ nnoremap <leader>nr :NERDTreeRefreshRoot<CR>    " 刷新树
 " 只剩 NERDTree 窗口时退出 vim
 autocmd BufEnter * if winnr('$') == 1 && exists('b:NERDTree') && b:NERDTree.isTabTree() | quit | endif
 
+" vim-illuminate：默认用 CursorLine 高亮，onedark 下几乎不可见，显式设灰底
+highlight IlluminatedWord      guibg=#3e4452 ctermbg=238
+highlight IlluminatedWordText  guibg=#3e4452 ctermbg=238
+
 " airline：匹配 onedark
 let g:airline_theme = 'onedark'
 let g:airline_powerline_fonts = 0
