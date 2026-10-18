@@ -106,6 +106,7 @@ ln -sf "$PWD/agents/rtl-verifier.md"   ~/.claude/agents/rtl-verifier.md
 - `,nr`：刷新文件树
 - `Ctrl+h/j/k/l`：分屏导航
 - `,l`：清除搜索高亮
+- `,sv`：重新加载 vimrc
 - `,aa`：RTL 代码对齐（可视模式对齐选中块）
 - `F4`：添加/更新文件头（vim-header）
 

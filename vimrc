@@ -211,6 +211,9 @@ nnoremap <C-l> <C-w>l
 " 清除搜索高亮（,l）
 nnoremap <silent> <leader>l :nohlsearch<CR>
 
+" 重新加载 vimrc（,sv）
+nnoremap <silent> <leader>sv :source $MYVIMRC<CR>
+
 " ---- 本机专属配置（不进 git）----
 if filereadable(expand("~/.vimrc_local"))
     source ~/.vimrc_local
