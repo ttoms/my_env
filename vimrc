@@ -158,8 +158,8 @@ nnoremap <leader>nr :NERDTreeRefreshRoot<CR>    " 刷新树
 autocmd BufEnter * if winnr('$') == 1 && exists('b:NERDTree') && b:NERDTree.isTabTree() | quit | endif
 
 " vim-illuminate：默认用 CursorLine 高亮，onedark 下几乎不可见，显式设灰底
-highlight IlluminatedWord      guibg=#3e4452 ctermbg=238
-highlight IlluminatedWordText  guibg=#3e4452 ctermbg=238
+highlight IlluminatedWord      guibg=#4b5263 ctermbg=239
+highlight IlluminatedWordText  guibg=#4b5263 ctermbg=239
 
 " airline：匹配 onedark
 let g:airline_theme = 'onedark'
@@ -181,7 +181,7 @@ nmap ga <Plug>(EasyAlign)
 " ============================================================
 "  文件操作 / 系统剪贴板快捷键（非 vim 习惯）
 "  注意：+y/+p 需 vim 编译时含 +clipboard（服务器无，Mac/GUI 有）；
-"        终端里 Ctrl+S/Ctrl+Q 需 stty -ixon（bashrc 已加）
+"        终端里 Ctrl+S 需 stty -ixon（bashrc 已加）
 " ============================================================
 
 " 保存：Ctrl+S
@@ -196,13 +196,7 @@ inoremap <C-a> <Esc>ggVG
 vnoremap <C-c> "+y
 vnoremap <C-x> "+d
 
-" 粘贴：Ctrl+V
-nnoremap <C-v> "+p
-inoremap <C-v> <C-r>+
-vnoremap <C-v> "+p
-
-" 块选择（原 Ctrl+V 被粘贴占用，改用 Ctrl+Q）
-nnoremap <C-q> <C-V>
+" 粘贴：p / "+p（Ctrl+V 保留为默认块选择）
 
 " ============================================================
 "  其他快捷键

@@ -100,8 +100,7 @@ ln -sf "$PWD/agents/rtl-verifier.md"   ~/.claude/agents/rtl-verifier.md
 - `Ctrl+s`：保存
 - `Ctrl+a`：全选
 - `Ctrl+c` / `Ctrl+x`：复制 / 剪切（visual 模式）
-- `Ctrl+v`：粘贴
-- `Ctrl+q`：块选择（原 `Ctrl+v` 被粘贴占用）
+- `Ctrl+v`：块选择（保留默认）
 - `Ctrl+n` / `ff`：开关文件树（NERDTree）
 - `,nf`：定位当前文件到文件树
 - `,nr`：刷新文件树
@@ -110,7 +109,7 @@ ln -sf "$PWD/agents/rtl-verifier.md"   ~/.claude/agents/rtl-verifier.md
 - `,aa`：RTL 代码对齐（可视模式对齐选中块）
 - `F4`：添加/更新文件头（vim-header）
 
-> 系统剪贴板（`Ctrl+c/x/v`）需 vim 编译时含 `+clipboard`；终端里 `Ctrl+s/q` 需 bash 已执行 `stty -ixon`（bashrc 已加）。文件头作者名放 `~/.vimrc_local` 里设 `g:header_field_author`。
+> 系统剪贴板（`Ctrl+c/x`）需 vim 编译时含 `+clipboard`；粘贴用 `p`/`"+p`。终端里 `Ctrl+s` 需 bash 已执行 `stty -ixon`（bashrc 已加）。文件头作者名放 `~/.vimrc_local` 里设 `g:header_field_author`。
 
 ## 本机专属配置（不进 git）
 
