@@ -32,6 +32,8 @@ Plug 'junegunn/vim-easy-align'
 Plug 'tpope/vim-surround'
 " 自动配对括号
 Plug 'jiangmiao/auto-pairs'
+" 高亮光标下单词的其他出现位置
+Plug 'RRethy/vim-illuminate'
 
 " rtl_align 对齐插件（本仓库自带，install.sh 复制到 ~/.vim/plugged/rtl_align）
 Plug '~/.vim/plugged/rtl_align'

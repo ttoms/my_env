@@ -57,6 +57,7 @@ bash install.sh --offline    # 离线安装（用 vim/vendor/ 打包的插件源
 | `junegunn/vim-easy-align` | 对齐（`ga`） |
 | `tpope/vim-surround` | 环绕引号/括号（`cs` / `ds` / `ys`） |
 | `jiangmiao/auto-pairs` | 自动配对括号 |
+| `RRethy/vim-illuminate` | 高亮光标下单词的其他出现位置（灰底） |
 
 ## RTL 对齐插件（rtl_align，内置）
 
