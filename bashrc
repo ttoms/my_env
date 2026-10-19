@@ -1,6 +1,5 @@
 # ============================================================
 #  bashrc — 通用开发环境配置
-#  由 install.sh 复制安装到 ~/.bashrc
 # ============================================================
 
 # ---- 编辑器 / 语言 ----
@@ -84,7 +83,7 @@ if [ -f /etc/bash_completion ] && ! shopt -oq posix; then
     . /etc/bash_completion
 fi
 
-# ---- 本机专属配置（不进 git，每台机器各自维护 ~/.bashrc_local）----
+# ---- 本机专属配置 ----
 # 放本机路径别名、API key 等私密/专属内容
 if [ -f ~/.bashrc_local ]; then
     . ~/.bashrc_local

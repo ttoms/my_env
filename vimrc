@@ -1,12 +1,11 @@
 " ============================================================
 "  vimrc — 通用 vim 配置
-"  由 install.sh 复制安装到 ~/.vimrc；插件用 :PlugInstall 安装
 " ============================================================
 
 set nocompatible
 
 " ============================================================
-"  插件（vim-plug，放在最前面）
+"  插件管理（vim-plug）
 " ============================================================
 call plug#begin('~/.vim/plugged')
 
@@ -35,7 +34,7 @@ Plug 'jiangmiao/auto-pairs'
 " 高亮光标下单词的其他出现位置
 Plug 'RRethy/vim-illuminate'
 
-" rtl_align 对齐插件（本仓库自带，install.sh 复制到 ~/.vim/plugged/rtl_align）
+" rtl_align 对齐插件
 Plug '~/.vim/plugged/rtl_align'
 
 " 后续可选：
@@ -230,7 +229,7 @@ nnoremap <silent> <leader>l :nohlsearch<CR>
 " 重新加载 vimrc（,sv）
 nnoremap <silent> <leader>sv :source $MYVIMRC<CR>
 
-" ---- 本机专属配置（不进 git）----
+" ---- 本机专属配置 ----
 if filereadable(expand("~/.vimrc_local"))
     source ~/.vimrc_local
 endif
