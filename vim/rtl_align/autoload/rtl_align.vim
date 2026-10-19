@@ -24,6 +24,14 @@ function! s:extract_comment(line) abort
     return [a:line[0 : l:idx - 1], a:line[l:idx : ]]
 endfunction
 
+" 该行是否带 keep 标记（行尾注释里含 g:rtl_align_keep_marker）
+function! s:is_keep(line) abort
+    let l:idx = stridx(a:line, '//')
+    if l:idx < 0 | return 0 | endif
+    let l:marker = get(g:, 'rtl_align_keep_marker', 'keep')
+    return stridx(a:line[l:idx : ], l:marker) >= 0
+endfunction
+
 " ------------------------------------------------------------
 " 通用表格对齐引擎
 "   rows: [{indent, cells}]
@@ -157,6 +165,7 @@ endfunction
 
 " 端口：direction type [dims] name [,] [// comment]
 function! s:parse_port(line) abort
+    if s:is_keep(a:line) | return {} | endif
     let [l:code, l:comment] = s:extract_comment(a:line)
     let l:code = substitute(l:code, ',\s*$', '', '')
     let l:indent = matchstr(l:code, '^\s*')
@@ -181,6 +190,7 @@ endfunction
 " 参数：parameter|localparam [type] name = value [,] [// comment]
 " 类型作为整体字段（packed 位宽不拆列）
 function! s:parse_param(line) abort
+    if s:is_keep(a:line) | return {} | endif
     let [l:code, l:comment] = s:extract_comment(a:line)
     let l:code = substitute(l:code, ',\s*$', '', '')
     let l:indent = matchstr(l:code, '^\s*')
@@ -202,6 +212,7 @@ endfunction
 
 " 信号声明：type [dims] name ; [// comment]（packed 维度，暂不含初始化/unpacked）
 function! s:parse_signal(line) abort
+    if s:is_keep(a:line) | return {} | endif
     let [l:code, l:comment] = s:extract_comment(a:line)
     let l:indent = matchstr(l:code, '^\s*')
     let l:body = substitute(l:code, '^\s*', '', '')
@@ -224,6 +235,7 @@ endfunction
 
 " 例化连接：.name (expr) [,] [// comment]
 function! s:parse_inst(line) abort
+    if s:is_keep(a:line) | return {} | endif
     let [l:code, l:comment] = s:extract_comment(a:line)
     let l:code = substitute(l:code, ',\s*$', '', '')
     let l:m = matchlist(l:code, '^\(\s*\)\(\.[A-Za-z_][A-Za-z0-9_]*\)\s*(\(.*\))\s*$')
@@ -418,19 +430,21 @@ function! rtl_align#align_all() abort
         let l:lnum += 1
     endwhile
 
-    " @vlog-align 信号块
+    " 信号块标记（可配 g:rtl_align_signal_marker）
+    let l:sig_marker = get(g:, 'rtl_align_signal_marker', '@vlog-align')
     let l:lnum = 1
     while l:lnum <= line('$')
-        if getline(l:lnum) =~# '@vlog-align'
+        if getline(l:lnum) =~# l:sig_marker
             call s:align_marked_block(l:lnum, 'signal')
         endif
         let l:lnum += 1
     endwhile
 
-    " @inst 例化块
+    " 例化块标记（可配 g:rtl_align_inst_marker）
+    let l:inst_marker = get(g:, 'rtl_align_inst_marker', '@inst')
     let l:lnum = 1
     while l:lnum <= line('$')
-        if getline(l:lnum) =~# '@inst'
+        if getline(l:lnum) =~# l:inst_marker
             call s:align_marked_block(l:lnum, 'inst')
         endif
         let l:lnum += 1
@@ -466,6 +480,11 @@ function! s:align_marked_block(mark_lnum, kind) abort
         endif
     endfor
     if empty(l:lines) | return | endif
+
+    " 信号声明块 ≤ 阈值行数不处理（可配 g:rtl_align_min_signal_lines）
+    if len(l:lines) <= get(g:, 'rtl_align_min_signal_lines', 3)
+        return
+    endif
 
     let l:out = s:align_signal_lines(l:lines)
     if empty(l:out) | return | endif

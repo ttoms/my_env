@@ -67,9 +67,9 @@ bash install.sh --offline    # 离线安装（用 vim/vendor/ 打包的插件源
 - **快捷键**：`,aa`（普通/可视模式，可视模式对齐选中块）
 - **标记**：`// @vlog-align`（信号声明块）、`// @inst`（例化块）、`// keep`（跳过该行）
 - module 声明（parameter + port 列表）自动对齐
-- 逗号行首风格（兼容行尾逗号输入）
+- 逗号行尾风格；packed 维度逐维拆前缀/后缀
 
-详见 `:help rtl_align`。
+标记、keep、信号块行数阈值均可配置。详见 `vim/rtl_align/README.md`。
 
 ## RTL 开发 skill + subagent（Claude Code）
 
