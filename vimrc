@@ -154,6 +154,16 @@ let g:rtl_align_inst_marker       = '@inst'        " 例化块标记；设为 ''
 let g:rtl_align_keep_marker       = 'keep'         " 跳过该行标记（行尾注释里）
 let g:rtl_align_min_signal_lines  = 3              " 信号块 ≤N 行不处理；设为 0 关闭过滤
 
+" rtl_align 快捷键（,aa 全部 / ,am module / ,as 信号 / ,ai 例化）
+nnoremap <silent> <leader>aa :RtlAlign<CR>
+nnoremap <silent> <leader>am :RtlAlignModule<CR>
+nnoremap <silent> <leader>as :RtlAlignSignal<CR>
+nnoremap <silent> <leader>ai :RtlAlignInst<CR>
+vnoremap <silent> <leader>aa <Plug>(rtl-align-block)
+vnoremap <silent> <leader>am <Plug>(rtl-align-module)
+vnoremap <silent> <leader>as <Plug>(rtl-align-signal)
+vnoremap <silent> <leader>ai <Plug>(rtl-align-inst)
+
 " NERDTree
 nnoremap <C-n> :NERDTreeToggle<CR>              " 打开/关闭（Ctrl+n）
 nnoremap ff    :NERDTreeToggle<CR>              " 打开/关闭（ff）
