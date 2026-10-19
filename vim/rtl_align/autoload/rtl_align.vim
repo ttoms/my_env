@@ -498,10 +498,18 @@ function! s:align_marked_block(mark_lnum, kind) abort
     let l:start = a:mark_lnum + 1
     let l:end = l:start
     let l:max = line('$')
-    while l:end <= l:max && getline(l:end) !~# '^\s*$'
-        let l:end += 1
-    endwhile
-    let l:end -= 1
+    if a:kind ==# 'inst'
+        " 例化块：延伸到结束的 ';'（中间允许空行/注释）
+        while l:end <= l:max && getline(l:end) !~# ';\s*$'
+            let l:end += 1
+        endwhile
+    else
+        " 信号块：到空行结束
+        while l:end <= l:max && getline(l:end) !~# '^\s*$'
+            let l:end += 1
+        endwhile
+        let l:end -= 1
+    endif
     if l:end < l:start | return | endif
 
     if a:kind ==# 'inst'
@@ -599,7 +607,7 @@ function! s:align_inst_auto() abort
         if l:line =~# '^\s*[A-Za-z_]\w*\s*\%(#\s*(\|\w\+\s*(\)'
             let l:start = l:lnum
             let l:end = l:lnum
-            while l:end <= l:max && getline(l:end) !~# '^\s*$'
+            while l:end <= l:max
                 if l:end > l:start && getline(l:end) =~# ';\s*$'
                     break
                 endif
