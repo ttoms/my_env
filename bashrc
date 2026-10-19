@@ -41,7 +41,7 @@ alias egrep='egrep --color=auto'
 alias fgrep='fgrep --color=auto'
 
 # git
-alias g='git'
+alias g='gvim'
 alias gs='git status -sb'
 alias gl='git log --oneline --graph --decorate -20'
 alias gd='git diff'

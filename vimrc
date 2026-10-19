@@ -37,11 +37,6 @@ Plug 'RRethy/vim-illuminate'
 
 " rtl_align 对齐插件（本仓库自带，install.sh 复制到 ~/.vim/plugged/rtl_align）
 Plug '~/.vim/plugged/rtl_align'
-" rtl_align 配置（可自定义，默认值如下）
-let g:rtl_align_signal_marker     = '@vlog-align'  " 信号块标记；设为 '' 自动识别
-let g:rtl_align_inst_marker       = '@inst'        " 例化块标记；设为 '' 自动识别
-let g:rtl_align_keep_marker       = 'keep'         " 跳过该行标记（行尾注释里）
-let g:rtl_align_min_signal_lines  = 3              " 信号块 ≤N 行不处理；设为 0 关闭过滤
 
 " 后续可选：
 " Plug 'junegunn/fzf.vim'                      " 模糊查找（需 fzf 二进制）
@@ -152,6 +147,12 @@ endif
 " ============================================================
 "  插件配置
 " ============================================================
+
+" rtl_align 配置（可自定义，默认值如下）
+let g:rtl_align_signal_marker     = '@vlog-align'  " 信号块标记；设为 '' 自动识别
+let g:rtl_align_inst_marker       = '@inst'        " 例化块标记；设为 '' 自动识别
+let g:rtl_align_keep_marker       = 'keep'         " 跳过该行标记（行尾注释里）
+let g:rtl_align_min_signal_lines  = 3              " 信号块 ≤N 行不处理；设为 0 关闭过滤
 
 " NERDTree
 nnoremap <C-n> :NERDTreeToggle<CR>              " 打开/关闭（Ctrl+n）
