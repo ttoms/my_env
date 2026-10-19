@@ -221,6 +221,10 @@ function! s:parse_signal(line) abort
     let l:tokens = split(l:body)
     if empty(l:tokens) | return {} | endif
     let l:type = l:tokens[0]
+    " 首 token 是关键字则不是信号声明（防 module t; 等误判）
+    if l:type =~# '^\(module\|endmodule\|assign\|always\|always_ff\|always_comb\|always_latch\|function\|endfunction\|task\|endtask\|begin\|end\|if\|else\|for\|while\|case\|endcase\|generate\|endgenerate\|initial\|final\|parameter\|localparam\|input\|output\|inout\|ref\|class\|endclass\|interface\|endinterface\|package\|endpackage\|program\|endprogram\|import\|export\)$'
+        return {}
+    endif
     let l:i = 1
     if l:i < len(l:tokens) && l:tokens[l:i] =~# '^\(signed\|unsigned\)$'
         let l:type .= ' ' . l:tokens[l:i]
@@ -391,7 +395,6 @@ function! s:align_inst_block(start, end) abort
     if !empty(l:cur.rows)
         call add(l:groups, l:cur)
     endif
-
     for l:g in l:groups
         let l:n = len(l:g.rows) - 1
         for l:r in l:g.rows
@@ -418,10 +421,39 @@ endfunction
 " 主入口
 " ------------------------------------------------------------
 
+" 对齐整个缓冲区（module + signal + inst）
 function! rtl_align#align_all() abort
     let l:view = winsaveview()
+    call s:align_module_all()
+    call s:align_signal_all()
+    call s:align_inst_all()
+    call winrestview(l:view)
+endfunction
 
-    " module 声明（参数 + 端口）
+" 只对齐 module 声明（整个缓冲区）
+function! rtl_align#align_module_all() abort
+    let l:view = winsaveview()
+    call s:align_module_all()
+    call winrestview(l:view)
+endfunction
+
+" 只对齐信号声明块（整个缓冲区）
+function! rtl_align#align_signal_all() abort
+    let l:view = winsaveview()
+    call s:align_signal_all()
+    call winrestview(l:view)
+endfunction
+
+" 只对齐例化块（整个缓冲区）
+function! rtl_align#align_inst_all() abort
+    let l:view = winsaveview()
+    call s:align_inst_all()
+    call winrestview(l:view)
+endfunction
+
+" ---- 内部：按类型扫整个缓冲区 ----
+
+function! s:align_module_all() abort
     let l:lnum = 1
     while l:lnum <= line('$')
         if getline(l:lnum) =~# '^\s*module\s\+\w\+'
@@ -429,30 +461,39 @@ function! rtl_align#align_all() abort
         endif
         let l:lnum += 1
     endwhile
+endfunction
 
-    " 信号块标记（可配 g:rtl_align_signal_marker）
-    let l:sig_marker = get(g:, 'rtl_align_signal_marker', '@vlog-align')
+function! s:align_signal_all() abort
+    let l:marker = get(g:, 'rtl_align_signal_marker', '@vlog-align')
+    if l:marker ==# ''
+        call s:align_signal_auto()
+        return
+    endif
     let l:lnum = 1
     while l:lnum <= line('$')
-        if getline(l:lnum) =~# l:sig_marker
+        if getline(l:lnum) =~# l:marker
             call s:align_marked_block(l:lnum, 'signal')
         endif
         let l:lnum += 1
     endwhile
+endfunction
 
-    " 例化块标记（可配 g:rtl_align_inst_marker）
-    let l:inst_marker = get(g:, 'rtl_align_inst_marker', '@inst')
+function! s:align_inst_all() abort
+    let l:marker = get(g:, 'rtl_align_inst_marker', '@inst')
+    if l:marker ==# ''
+        call s:align_inst_auto()
+        return
+    endif
     let l:lnum = 1
     while l:lnum <= line('$')
-        if getline(l:lnum) =~# l:inst_marker
+        if getline(l:lnum) =~# l:marker
             call s:align_marked_block(l:lnum, 'inst')
         endif
         let l:lnum += 1
     endwhile
-
-    call winrestview(l:view)
 endfunction
 
+" 标记块：从标记行开始，到空行结束
 function! s:align_marked_block(mark_lnum, kind) abort
     let l:start = a:mark_lnum + 1
     let l:end = l:start
@@ -479,23 +520,10 @@ function! s:align_marked_block(mark_lnum, kind) abort
             call add(l:lnums, l:lnum)
         endif
     endfor
-    if empty(l:lines) | return | endif
-
-    " 信号声明块 ≤ 阈值行数不处理（可配 g:rtl_align_min_signal_lines）
-    if len(l:lines) <= get(g:, 'rtl_align_min_signal_lines', 3)
-        return
-    endif
-
-    let l:out = s:align_signal_lines(l:lines)
-    if empty(l:out) | return | endif
-
-    let l:idx = 0
-    for l:lnum in l:lnums
-        call setline(l:lnum, l:out[l:idx])
-        let l:idx += 1
-    endfor
+    call s:align_signal_block(l:lines, l:lnums)
 endfunction
 
+" module 声明对齐（参数 + 端口）
 function! s:align_module_decl(lnum) abort
     let l:i = a:lnum
     let l:max = line('$')
@@ -532,8 +560,88 @@ function! s:align_module_decl(lnum) abort
     endif
 endfunction
 
-function! rtl_align#align_range(line1, line2) abort
+" ---- 自动识别（marker 为空时）----
+
+" 自动找连续信号声明块
+function! s:align_signal_auto() abort
+    let l:max = line('$')
+    let l:lnum = 1
+    while l:lnum <= l:max
+        if !empty(s:parse_signal(getline(l:lnum)))
+            let l:lines = []
+            let l:lnums = []
+            while l:lnum <= l:max
+                let l:line = getline(l:lnum)
+                if !empty(s:parse_signal(l:line))
+                    call add(l:lines, l:line)
+                    call add(l:lnums, l:lnum)
+                    let l:lnum += 1
+                elseif l:line =~# '^\s*//'
+                    let l:lnum += 1
+                else
+                    break
+                endif
+            endwhile
+            call s:align_signal_block(l:lines, l:lnums)
+        else
+            let l:lnum += 1
+        endif
+    endwhile
+endfunction
+
+" 自动找模块例化块
+function! s:align_inst_auto() abort
+    let l:max = line('$')
+    let l:lnum = 1
+    while l:lnum <= l:max
+        let l:line = getline(l:lnum)
+        " 例化头：module_name #( 或 module_name instance_name (
+        if l:line =~# '^\s*[A-Za-z_]\w*\s*\%(#\s*(\|\w\+\s*(\)'
+            let l:start = l:lnum
+            let l:end = l:lnum
+            while l:end <= l:max && getline(l:end) !~# '^\s*$'
+                if l:end > l:start && getline(l:end) =~# ';\s*$'
+                    break
+                endif
+                let l:end += 1
+            endwhile
+            call s:align_inst_block(l:start, l:end)
+            let l:lnum = l:end + 1
+        else
+            let l:lnum += 1
+        endif
+    endwhile
+endfunction
+
+" 对齐单个信号块（阈值 + 对齐 + 写回）
+function! s:align_signal_block(lines, lnums) abort
+    if empty(a:lines) | return | endif
+    let l:min = get(g:, 'rtl_align_min_signal_lines', 3)
+    if len(a:lines) <= l:min | return | endif
+    let l:out = s:align_signal_lines(a:lines)
+    if empty(l:out) | return | endif
+    let l:idx = 0
+    for l:lnum in a:lnums
+        call setline(l:lnum, l:out[l:idx])
+        let l:idx += 1
+    endfor
+endfunction
+
+" 手动选区对齐：type = auto / module / signal / inst
+function! rtl_align#align_range(line1, line2, ...) abort
+    let l:type = a:0 ? a:1 : 'auto'
     let l:view = winsaveview()
+
+    if l:type ==# 'module'
+        for l:lnum in range(a:line1, a:line2)
+            if getline(l:lnum) =~# '^\s*module\s\+\w\+'
+                call s:align_module_decl(l:lnum)
+            endif
+        endfor
+        call winrestview(l:view)
+        return
+    endif
+
     let l:lines = []
     let l:lnums = []
     for l:lnum in range(a:line1, a:line2)
@@ -544,11 +652,17 @@ function! rtl_align#align_range(line1, line2) abort
     endfor
     if empty(l:lines) | call winrestview(l:view) | return | endif
 
-    let l:is_inst = 1
-    for l:line in l:lines
-        if l:line !~# '^\s*,*\.\w\+\s*(' | let l:is_inst = 0 | break | endif
-    endfor
-    let l:out = l:is_inst ? s:align_inst_lines(l:lines) : s:align_signal_lines(l:lines)
+    if l:type ==# 'signal'
+        let l:out = s:align_signal_lines(l:lines)
+    elseif l:type ==# 'inst'
+        let l:out = s:align_inst_lines(l:lines)
+    else
+        let l:is_inst = 1
+        for l:line in l:lines
+            if l:line !~# '^\s*,*\.\w\+\s*(' | let l:is_inst = 0 | break | endif
+        endfor
+        let l:out = l:is_inst ? s:align_inst_lines(l:lines) : s:align_signal_lines(l:lines)
+    endif
     if empty(l:out) | call winrestview(l:view) | return | endif
 
     let l:idx = 0
@@ -559,7 +673,7 @@ function! rtl_align#align_range(line1, line2) abort
     call winrestview(l:view)
 endfunction
 
-" 手动选区里的例化连接对齐（单组）
+" 例化连接对齐（单组）
 function! s:align_inst_lines(lines) abort
     let l:rows = []
     for l:line in a:lines

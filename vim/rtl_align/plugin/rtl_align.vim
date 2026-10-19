@@ -22,6 +22,12 @@ if !exists('g:rtl_align_min_signal_lines')
 endif
 
 command! RtlAlign call rtl_align#align_all()
+command! RtlAlignModule call rtl_align#align_module_all()
+command! RtlAlignSignal call rtl_align#align_signal_all()
+command! RtlAlignInst call rtl_align#align_inst_all()
 
-" 视觉模式下对齐选中块
-vnoremap <Plug>(rtl-align-block) :<C-u>call rtl_align#align_range(line("'<"), line("'>"))<CR>
+" 视觉模式下按类型对齐选中块（auto 自动判断 / module / signal / inst）
+vnoremap <Plug>(rtl-align-block)  :<C-u>call rtl_align#align_range(line("'<"), line("'>"))<CR>
+vnoremap <Plug>(rtl-align-module) :<C-u>call rtl_align#align_range(line("'<"), line("'>"), 'module')<CR>
+vnoremap <Plug>(rtl-align-signal) :<C-u>call rtl_align#align_range(line("'<"), line("'>"), 'signal')<CR>
+vnoremap <Plug>(rtl-align-inst)   :<C-u>call rtl_align#align_range(line("'<"), line("'>"), 'inst')<CR>
