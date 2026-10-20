@@ -145,7 +145,7 @@ child #(
 
 > ⚠️ 当前插件未实现此特性（不拆行、不合并行），逐行处理，此节仅描述目标行为。
 
-安全整文件入口会把可识别的列表整理成：
+目标行为是把可识别的列表整理成：
 
 - 一个参数声明一行
 - 一个端口声明一行
@@ -466,9 +466,9 @@ parameter   int LONG_NAME   =   WIDTH + 1
 
 短值 `1` 后可能出现较长空白，这是为了让列表中的逗号单独成列。
 
-### 7.4 正文 localparam 的分号不单独拆列
+### 7.4 正文 localparam 的分号单独拆列
 
-模块正文里的 localparam/parameter 声明块同样对齐（关键字 | 类型 | 参数名 | = | 值，分号贴值）。
+模块正文里的 localparam/parameter 声明块同样对齐（关键字 | 类型 | 参数名 | = | 值 | 分号）。
 
 输入：
 
@@ -477,6 +477,7 @@ module m;
 localparam int A = 1;        // a
 localparam int LONG_NAME = N + 20;  // b
 parameter int X = 2;
+localparam int WIDTH = 32;   // c
 endmodule
 ```
 
@@ -484,15 +485,16 @@ endmodule
 
 ```systemverilog
 module m;
-localparam  int A           =   1;      // a
-localparam  int LONG_NAME   =   N + 20; // b
-parameter   int X           =   2;
+localparam  int A           =   1       ;   // a
+localparam  int LONG_NAME   =   N + 20  ;   // b
+parameter   int X           =   2       ;
+localparam  int WIDTH       =   32      ;   // c
 endmodule
 ```
 
 - `=` 和值起点对齐
-- `;` 仍紧跟值表达式（值与分号同属一列）
-- **不能**把"参数逗号单独对齐"扩大成"参数分号也单独对齐"
+- `;` 单独一列对齐（与 §8.1 普通信号声明的分号处理一致）
+- 值与分号不再同属一列
 
 ---
 
@@ -673,13 +675,10 @@ endmodule
 
 | 操作方式 | 范围规则 |
 |---|---|
-| Safe／脚本整文件 | 自动识别 module、独立声明与命名例化；正文独立声明按空行分块 |
 | module 声明对齐 | 在选中的 module 声明范围内，参数列表和端口列表分别成组 |
 | 标记式信号块对齐 | 从标记对应的信号声明开始，到空行或非声明代码结束 |
 | 手动选区对齐 | 选区内同类参与行按一次操作共同计算；空行本身跳过，但不应假定自动拆成多个块 |
 | 单次例化对齐 | 选中范围内的连接按一组共同计算（不自动拆参数/端口组） |
-
-> 如果要得到与日常 `rtl_align.py` 相同的结果，应使用这里描述的 Safe 自动分块规则，不能用"把几段代码一起选中"代替。
 
 ---
 

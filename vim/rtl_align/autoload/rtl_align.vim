@@ -467,7 +467,7 @@ function! s:align_inst_block(start, end) abort
     endfor
 endfunction
 
-" 正文 localparam/parameter：keyword type name = value;（分号贴值）
+" 正文 localparam/parameter：keyword type name = value ;（分号单独列）
 function! s:parse_para(line) abort
     if s:is_keep(a:line) | return {} | endif
     let [l:code, l:comment] = s:extract_comment(a:line)
@@ -489,7 +489,7 @@ function! s:parse_para(line) abort
     return {'indent': strlen(l:indent), 'kw': l:kw, 'type': l:type, 'name': l:name, 'value': l:value, 'comment': l:comment}
 endfunction
 
-" 正文参数声明块对齐（kw | type | name | = | value; | comment）
+" 正文参数声明块对齐（kw | type | name | = | value | ; | comment）
 function! s:align_para_lines(lines) abort
     let l:rows = []
     for l:line in a:lines
@@ -504,7 +504,8 @@ function! s:align_para_lines(lines) abort
                     \ {'text': l:r.type, 'align': 'l', 'gap': 'grid'},
                     \ {'text': l:r.name, 'align': 'l', 'gap': 'grid'},
                     \ {'text': '=', 'align': 'l', 'gap': 'grid'},
-                    \ {'text': l:r.value . ';', 'align': 'l', 'gap': 'grid'},
+                    \ {'text': l:r.value, 'align': 'l', 'gap': 'grid'},
+                    \ {'text': ';', 'align': 'l', 'gap': 'grid'},
                     \ ]
         if l:r.comment !=# ''
             call add(l:r.cells, {'text': l:r.comment, 'align': 'l', 'gap': 'grid'})
