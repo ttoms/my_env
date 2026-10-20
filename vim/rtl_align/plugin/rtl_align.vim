@@ -20,6 +20,9 @@ endif
 if !exists('g:rtl_align_min_signal_lines')
     let g:rtl_align_min_signal_lines = 3            " 信号声明块 ≤ 此行数不处理
 endif
+if !exists('g:rtl_align_min_para_lines')
+    let g:rtl_align_min_para_lines = 3              " 正文参数声明块 ≤ 此行数不处理
+endif
 
 command! RtlAlign call rtl_align#align_all()
 command! RtlAlignModule call rtl_align#align_module_all()

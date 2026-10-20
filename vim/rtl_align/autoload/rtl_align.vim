@@ -210,7 +210,7 @@ function! s:parse_param(line) abort
     return {'indent': strlen(l:indent), 'kw': l:kw, 'type': l:type, 'name': l:name, 'value': l:value, 'comment': l:comment}
 endfunction
 
-" 信号声明：type [dims] name ; [// comment]（packed 维度，暂不含初始化/unpacked）
+" 信号声明：type [dims] name [= value | [unpacked]] ; [// comment]
 function! s:parse_signal(line) abort
     if s:is_keep(a:line) | return {} | endif
     let [l:code, l:comment] = s:extract_comment(a:line)
@@ -221,12 +221,7 @@ function! s:parse_signal(line) abort
     let l:tokens = split(l:body)
     if empty(l:tokens) | return {} | endif
     let l:type = l:tokens[0]
-    " 首 token 是关键字则不是信号声明（防 module t; 等误判）
     if l:type =~# '^\(module\|endmodule\|assign\|always\|always_ff\|always_comb\|always_latch\|function\|endfunction\|task\|endtask\|begin\|end\|if\|else\|for\|while\|case\|endcase\|generate\|endgenerate\|initial\|final\|parameter\|localparam\|input\|output\|inout\|ref\|class\|endclass\|interface\|endinterface\|package\|endpackage\|program\|endprogram\|import\|export\)$'
-        return {}
-    endif
-    " 带初始化(=)的声明暂不支持，跳过（否则 name 会误取成值、丢数据）
-    if index(l:tokens, '=') >= 0
         return {}
     endif
     let l:i = 1
@@ -235,10 +230,38 @@ function! s:parse_signal(line) abort
         let l:i += 1
     endif
     if l:i >= len(l:tokens) | return {} | endif
-    let l:name = l:tokens[-1]
-    if l:name =~# '^\[.*\]$' | return {} | endif
-    let l:dims = substitute(join(l:tokens[l:i : -2], ''), '\s', '', 'g')
-    return {'indent': strlen(l:indent), 'type': l:type, 'dims': s:split_dims(l:dims), 'name': l:name, 'tail': ';', 'comment': l:comment}
+
+    " 初始化：type [dims] name = value ;
+    let l:eq_idx = index(l:tokens, '=')
+    if l:eq_idx > l:i
+        let l:name = l:tokens[l:eq_idx - 1]
+        if l:name =~# '^\[.*\]$' | return {} | endif
+        let l:dims = substitute(join(l:tokens[l:i : l:eq_idx - 1], ''), '\s', '', 'g')
+        let l:value = join(l:tokens[l:eq_idx + 1 :], ' ')
+        return {'indent': strlen(l:indent), 'type': l:type, 'dims': s:split_dims(l:dims), 'name': l:name, 'kind': 'init', 'value': l:value, 'comment': l:comment}
+    endif
+
+    " 打包维度（连续的 [..] tokens）
+    let l:dims_tokens = []
+    while l:i < len(l:tokens) && l:tokens[l:i] =~# '^\['
+        call add(l:dims_tokens, l:tokens[l:i])
+        let l:i += 1
+    endwhile
+    if l:i >= len(l:tokens) | return {} | endif
+    let l:name = l:tokens[l:i]
+    let l:i += 1
+    " unpacked 维度（name 之后的 [..] tokens）
+    let l:unpacked = ''
+    while l:i < len(l:tokens) && l:tokens[l:i] =~# '^\['
+        let l:unpacked .= l:tokens[l:i]
+        let l:i += 1
+    endwhile
+    if l:i < len(l:tokens) | return {} | endif
+    let l:dims = substitute(join(l:dims_tokens, ''), '\s', '', 'g')
+    if l:unpacked !=# ''
+        return {'indent': strlen(l:indent), 'type': l:type, 'dims': s:split_dims(l:dims), 'name': l:name, 'kind': 'unpacked', 'unpacked': l:unpacked, 'comment': l:comment}
+    endif
+    return {'indent': strlen(l:indent), 'type': l:type, 'dims': s:split_dims(l:dims), 'name': l:name, 'kind': 'plain', 'comment': l:comment}
 endfunction
 
 " 例化连接：.name (expr) [,] [// comment]
@@ -353,9 +376,7 @@ function! s:align_signal_lines(lines) abort
 
     let l:i = 0
     for l:r in l:rows
-        let l:cells = [
-                    \ {'text': l:r.type, 'align': 'l', 'gap': 'grid'},
-                    \ ]
+        let l:cells = [{'text': l:r.type, 'align': 'l', 'gap': 'grid'}]
         let l:first = 1
         for l:dc in l:dims_cells[l:i]
             if l:first
@@ -366,9 +387,18 @@ function! s:align_signal_lines(lines) abort
             endif
         endfor
         call add(l:cells, {'text': l:r.name, 'align': 'l', 'gap': 'grid'})
-        call add(l:cells, {'text': l:r.tail, 'align': 'l', 'gap': 'grid'})
-        if l:r.comment !=# ''
-            call add(l:cells, {'text': l:r.comment, 'align': 'l', 'gap': 'grid'})
+        if l:r.kind ==# 'init'
+            call add(l:cells, {'text': '=', 'align': 'l', 'gap': 'grid'})
+            let l:tail = l:r.value . ';' . (l:r.comment !=# '' ? ' ' . l:r.comment : '')
+            call add(l:cells, {'text': l:tail, 'align': 'l', 'gap': 'grid'})
+        elseif l:r.kind ==# 'unpacked'
+            let l:tail = l:r.unpacked . ';' . (l:r.comment !=# '' ? ' ' . l:r.comment : '')
+            call add(l:cells, {'text': l:tail, 'align': 'l', 'gap': 'grid'})
+        else
+            call add(l:cells, {'text': ';', 'align': 'l', 'gap': 'grid'})
+            if l:r.comment !=# ''
+                call add(l:cells, {'text': l:r.comment, 'align': 'l', 'gap': 'grid'})
+            endif
         endif
         let l:r.cells = l:cells
         let l:i += 1
@@ -437,6 +467,93 @@ function! s:align_inst_block(start, end) abort
     endfor
 endfunction
 
+" 正文 localparam/parameter：keyword type name = value;（分号贴值）
+function! s:parse_para(line) abort
+    if s:is_keep(a:line) | return {} | endif
+    let [l:code, l:comment] = s:extract_comment(a:line)
+    let l:code = substitute(l:code, ';\s*$', '', '')
+    let l:indent = matchstr(l:code, '^\s*')
+    let l:body = substitute(l:code, '^\s*', '', '')
+    let l:m = matchlist(l:body, '^\(parameter\|localparam\)\s\+\(.*\)$')
+    if empty(l:m) | return {} | endif
+    let l:kw = l:m[1]
+    let l:rest = l:m[2]
+    let l:eq = stridx(l:rest, '=')
+    if l:eq < 0 | return {} | endif
+    let l:lhs = substitute(l:rest[0 : l:eq - 1], '\s*$', '', '')
+    let l:value = substitute(substitute(l:rest[l:eq + 1 : ], '^\s*', '', ''), '\s*$', '', '')
+    let l:lhs_tokens = split(l:lhs)
+    if empty(l:lhs_tokens) | return {} | endif
+    let l:name = l:lhs_tokens[-1]
+    let l:type = join(l:lhs_tokens[0 : -2], ' ')
+    return {'indent': strlen(l:indent), 'kw': l:kw, 'type': l:type, 'name': l:name, 'value': l:value, 'comment': l:comment}
+endfunction
+
+" 正文参数声明块对齐（kw | type | name | = | value; | comment）
+function! s:align_para_lines(lines) abort
+    let l:rows = []
+    for l:line in a:lines
+        let l:p = s:parse_para(l:line)
+        if empty(l:p) | continue | endif
+        call add(l:rows, l:p)
+    endfor
+    if empty(l:rows) | return [] | endif
+    for l:r in l:rows
+        let l:r.cells = [
+                    \ {'text': l:r.kw, 'align': 'l', 'gap': 'grid'},
+                    \ {'text': l:r.type, 'align': 'l', 'gap': 'grid'},
+                    \ {'text': l:r.name, 'align': 'l', 'gap': 'grid'},
+                    \ {'text': '=', 'align': 'l', 'gap': 'grid'},
+                    \ {'text': l:r.value . ';', 'align': 'l', 'gap': 'grid'},
+                    \ ]
+        if l:r.comment !=# ''
+            call add(l:r.cells, {'text': l:r.comment, 'align': 'l', 'gap': 'grid'})
+        endif
+    endfor
+    return s:align_rows(l:rows)
+endfunction
+
+" 自动找连续正文 localparam/parameter 声明块
+function! s:align_para_auto() abort
+    let l:max = line('$')
+    let l:lnum = 1
+    while l:lnum <= l:max
+        if !empty(s:parse_para(getline(l:lnum)))
+            let l:lines = []
+            let l:lnums = []
+            while l:lnum <= l:max
+                let l:line = getline(l:lnum)
+                if !empty(s:parse_para(l:line))
+                    call add(l:lines, l:line)
+                    call add(l:lnums, l:lnum)
+                    let l:lnum += 1
+                elseif l:line =~# '^\s*//'
+                    let l:lnum += 1
+                else
+                    break
+                endif
+            endwhile
+            call s:align_para_block(l:lines, l:lnums)
+        else
+            let l:lnum += 1
+        endif
+    endwhile
+endfunction
+
+" 对齐单个正文参数块（阈值 + 对齐 + 写回）
+function! s:align_para_block(lines, lnums) abort
+    if empty(a:lines) | return | endif
+    let l:min = get(g:, 'rtl_align_min_para_lines', 3)
+    if len(a:lines) <= l:min | return | endif
+    let l:out = s:align_para_lines(a:lines)
+    if empty(l:out) | return | endif
+    let l:idx = 0
+    for l:lnum in a:lnums
+        call setline(l:lnum, l:out[l:idx])
+        let l:idx += 1
+    endfor
+endfunction
+
 " ------------------------------------------------------------
 " 主入口
 " ------------------------------------------------------------
@@ -446,6 +563,7 @@ function! rtl_align#align_all() abort
     let l:view = winsaveview()
     call s:align_module_all()
     call s:align_signal_all()
+    call s:align_para_auto()
     call s:align_inst_all()
     call winrestview(l:view)
 endfunction
