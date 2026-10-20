@@ -409,14 +409,27 @@ function! s:align_inst_block(start, end) abort
                         \ ]
         endfor
         let l:out = s:align_rows(l:g.rows)
-        let l:idx = 0
-        for l:lnum in l:g.lnums
-            let l:line = l:out[l:idx]
-            if l:idx < l:n
+        " 追加逗号
+        let l:lines = []
+        for l:i in range(len(l:out))
+            let l:line = l:out[l:i]
+            if l:i < l:n
                 let l:line .= ','
             endif
-            if l:g.rows[l:idx].comment !=# ''
-                let l:line .= ' ' . l:g.rows[l:idx].comment
+            call add(l:lines, l:line)
+        endfor
+        " 注释独立一列（grid 对齐）
+        let l:maxlen = 0
+        for l:line in l:lines
+            if len(l:line) > l:maxlen | let l:maxlen = len(l:line) | endif
+        endfor
+        let l:ccol = s:ceil4(l:maxlen + 1)
+        let l:idx = 0
+        for l:lnum in l:g.lnums
+            let l:line = l:lines[l:idx]
+            let l:r = l:g.rows[l:idx]
+            if l:r.comment !=# ''
+                let l:line .= repeat(' ', l:ccol - len(l:line)) . l:r.comment
             endif
             call setline(l:lnum, l:line)
             let l:idx += 1
@@ -710,8 +723,16 @@ function! s:align_inst_lines(lines) abort
         if l:i < l:n
             let l:out[l:i] .= ','
         endif
+    endfor
+    " 注释独立一列（grid 对齐）
+    let l:maxlen = 0
+    for l:line in l:out
+        if len(l:line) > l:maxlen | let l:maxlen = len(l:line) | endif
+    endfor
+    let l:ccol = s:ceil4(l:maxlen + 1)
+    for l:i in range(len(l:rows))
         if l:rows[l:i].comment !=# ''
-            let l:out[l:i] .= ' ' . l:rows[l:i].comment
+            let l:out[l:i] .= repeat(' ', l:ccol - len(l:out[l:i])) . l:rows[l:i].comment
         endif
     endfor
     return l:out
