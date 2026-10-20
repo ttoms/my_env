@@ -63,13 +63,13 @@ bash install.sh --offline    # 离线安装（用 vim/vendor/ 打包的插件源
 
 自带的 SystemVerilog / Verilog 代码对齐插件，通过 vim-plug 安装（vimrc 里 `Plug 'ttoms/my_env', { 'rtp': 'vim/rtl_align' }`）。按列对齐 RTL 代码，幂等（重复执行结果不变）。
 
-- **命令**：`:RtlAlign`（对齐整个缓冲区）
+- **命令**：`:RtlAlign`（对齐整个缓冲区：module + 信号 + 例化）
 - **快捷键**：`,aa`（普通/可视模式，可视模式对齐选中块）
-- **标记**：`// @vlog-align`（信号声明块）、`// @inst`（例化块）、`// keep`（跳过该行）
+- **无标记**：vimrc 已把 `g:rtl_align_signal_marker` / `g:rtl_align_inst_marker` 设为空，插件自动识别信号声明块和例化块，代码中不写 `@vlog-align` / `@inst`
 - module 声明（parameter + port 列表）自动对齐
 - 逗号行尾风格；packed 维度逐维拆前缀/后缀
 
-标记、keep、信号块行数阈值均可配置。详见 `vim/rtl_align/README.md`。
+阈值等其余配置项见 `vim/rtl_align/README.md`。
 
 ## RTL 开发 skill + subagent（Claude Code）
 
@@ -77,7 +77,8 @@ bash install.sh --offline    # 离线安装（用 vim/vendor/ 打包的插件源
 
 - **skill** `skills/rtl-developer/`：编排「架构师出方案 → 用户确认 → 开发实现 → 验证闭环」，自带编码规范 + 质量门控脚本
 - **agent** `agents/rtl-architect.md`（架构方案）/ `rtl-developer.md`（实现）/ `rtl-verifier.md`（验证）
-- **编码规范** `skills/rtl-developer/references/rtl-coding-standard.md`：命名/风格/对齐/寄存器例化/可综合性/质量门控
+- **编码规范** `skills/rtl-developer/references/rtl-coding-standard.md`：命名/风格/对齐/寄存器例化/`.sva` 断言/可综合性/质量门控
+- **断言约定**：模块 `.sv` 内不写断言；需要断言时建同名 `<module>.sva`（简单模块可省略），在 `endmodule` 前由 `SVA_ON` include；代码中不加对齐标记，统一 `:RtlAlign`
 
 ### 安装到 Claude Code
 

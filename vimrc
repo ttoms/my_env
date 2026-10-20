@@ -147,10 +147,10 @@ endif
 "  插件配置
 " ============================================================
 
-" rtl_align 配置（可自定义，默认值如下）
-let g:rtl_align_signal_marker     = '@vlog-align'  " 信号块标记；设为 '' 自动识别
-let g:rtl_align_inst_marker       = '@inst'        " 例化块标记；设为 '' 自动识别
-let g:rtl_align_keep_marker       = 'keep'         " 跳过该行标记（行尾注释里）
+" rtl_align 配置：代码中不写对齐标记，普通模式 :RtlAlign 自动识别全部块
+let g:rtl_align_signal_marker     = ''             " 空 = 自动识别信号声明块
+let g:rtl_align_inst_marker       = ''             " 空 = 自动识别例化块
+let g:rtl_align_keep_marker       = '@keep'        " 代码中不使用；保留插件跳过能力
 let g:rtl_align_min_signal_lines  = 3              " 信号块 ≤N 行不处理；设为 0 关闭过滤
 let g:rtl_align_min_para_lines    = 3              " 正文参数块 ≤N 行不处理；设为 0 关闭过滤
 

@@ -16,6 +16,7 @@
 | package | `_pkg.sv` 后缀 | `axi_pkg.sv` |
 | interface | `_if.sv` 后缀 | `axi_if.sv` |
 | testbench | `_tb.sv` 后缀 | `fifo_sync_tb.sv` |
+| 断言文件 | 与模块同名，`.sva` 后缀 | `fifo_sync.sva` |
 
 - 一个文件一个模块
 - 子模块顶层用 `_top` 后缀；层级过深（>4 级）时保留两头缩写控制命名长度
@@ -74,16 +75,16 @@ ANSI 风格，每行一个信号，方向/类型/位宽/名称列对齐（见 §
 
 ```systemverilog
 module fifo_sync #(
-    parameter  DATA_W = 32
-    ,parameter  DEPTH  = 16
+    parameter   DATA_W = 32,
+    parameter   DEPTH  = 16
 ) (
-    input  logic               clk
-    ,input  logic               rst_n
-    ,input  logic               wr_en
-    ,input  logic [DATA_W-1:0]  wr_data
-    ,output logic [DATA_W-1:0]  rd_data
-    ,output logic               empty
-    ,output logic               full
+    input   logic               clk,
+    input   logic               rst_n,
+    input   logic               wr_en,
+    input   logic [DATA_W-1:0]  wr_data,
+    output  logic [DATA_W-1:0]  rd_data,
+    output  logic               empty,
+    output  logic               full
 );
 ```
 
@@ -92,17 +93,17 @@ module fifo_sync #(
 按功能分段，相关信号放一起：
 1. clk 与 rst_n
 2. 配置/参数输入
-3. 数据输入（valid-ready 对：valid → data → ready）
+3. 数据输入（valid-ready 对：vld → data → rdy）
 4. 数据输出
 5. 状态/中断输出
 6. 调试观测输出
 
 ### 2.3 valid-ready 握手
 
-- 发送方 `valid` 寄存器输出，`data` 与 `valid` 同周期有效
-- 接收方 `ready` 可为组合输出
-- 握手成立 `valid && ready`
-- 禁止 `valid` 依赖 `ready`（不能因 ready 拉低而撤销 valid）
+- 发送方 `*_vld` 寄存器输出，`data` 与 `vld` 同周期有效
+- 接收方 `*_rdy` 可为组合输出
+- 握手成立 `vld && rdy`
+- 禁止 `vld` 依赖 `rdy`（不能因 `rdy` 拉低而撤销 `vld`）
 
 ## 3. 参数与 localparam
 
@@ -122,7 +123,11 @@ module xxx #(...) ( ... );
 // --- Internal Signals ---
 // --- Main Code（组合逻辑 + 寄存器例化）---
 // --- DFX / Debug ---
-// --- Assertion ---
+
+// --- SVA include（必须是 endmodule 前的最后一段）---
+`ifdef SVA_ON
+`include "xxx.sva"
+`endif
 
 endmodule
 ```
@@ -175,6 +180,8 @@ always_ff @(posedge clk or negedge rst_n) begin
 end
 ```
 
+> 有统一 DFF 单元时，业务模块不直接写 `always_ff`，寄存器一律按 §7 例化；上面的写法仅用于无 DFF 单元的场景或 DFF 单元自身实现。
+
 ## 6. 状态机
 
 - 两段式（次态组合 + 状态寄存器）或三段式（复杂/出口时序紧张时）
@@ -189,11 +196,20 @@ typedef enum logic [2:0] {
 } fsm_state_e;
 
 fsm_state_e a_fifo_st, nxt_a_fifo_st;
+logic       fifo_st_en;
 
-always_ff @(posedge clk or negedge rst_n) begin
-    if (!rst_n) a_fifo_st <= ST_IDLE;
-    else        a_fifo_st <= nxt_a_fifo_st;
-end
+assign fifo_st_en = (nxt_a_fifo_st != a_fifo_st);
+
+dffr #(
+    .W        (3        ),
+    .RESET_VAL(ST_IDLE  )
+) U_FIFO_ST (
+    .clk    (clk          ),
+    .rst_n  (rst_n        ),
+    .en     (fifo_st_en   ),
+    .d      (nxt_a_fifo_st),
+    .q      (a_fifo_st    )
+);
 
 always_comb begin
     nxt_a_fifo_st = a_fifo_st;
@@ -213,21 +229,19 @@ end
 项目提供带显式 `en` 使能的 DFF 单元时，寄存器一律通过它例化，禁止在业务模块直接写 `always_ff`。理由：显式 `en` 让综合工具精准插入时钟门控（ICG），并保证寄存器风格统一。
 
 ```systemverilog
-// @vlog-align
-logic   [W-1:0]     cnt     ;
-logic   [W-1:0]     nxt_cnt ;
-logic               cnt_en  ;
+logic   [W-1:0]  cnt     ;
+logic   [W-1:0]  nxt_cnt ;
+logic            cnt_en  ;
 
-// @inst
 dffr #(
-    .W        (W      )
-    ,.RESET_VAL ('0    )
+    .W        (W      ),
+    .RESET_VAL('0     )
 ) U_CNT (
-    .clk    (clk    )
-    ,.rst_n (rst_n  )
-    ,.en    (cnt_en )
-    ,.d     (nxt_cnt)
-    ,.q     (cnt    )
+    .clk    (clk    ),
+    .rst_n  (rst_n  ),
+    .en     (cnt_en ),
+    .d      (nxt_cnt),
+    .q      (cnt    )
 );
 ```
 
@@ -265,25 +279,54 @@ dffr #(.W(W), .RESET_VAL('0)) U_CNT (.clk(clk), .rst_n(rst_n), .en(cnt_en), .d(n
 
 例外：参数值（`#(...)` 内）可写常量表达式。
 
-## 9. 参数校验
+## 9. 断言与参数校验（.sva）
 
-**禁止 `initial begin/end` 过程块**。参数合法性检查用 SVA `initial` 序列断言（时间 0 检查一次）：
+### 9.1 断言文件约定
+
+- 模块文件内**不写任何断言**（`assert` / `assume` / `cover` / `restrict`）
+- `.sva` **按需创建**，不要求每个模块都有：
+  - 建议创建：接口协议/valid-ready 握手、状态机、FIFO/仲裁/指针回绕、CDC、计数器边界、关键不变量、参数范围影响正确性
+  - 可以省略：纯组合译码/选择、单级寄存器或 DFF 包装、连线/常量模块等简单逻辑
+- 有断言需求时，建一个同名 `.sva` 文件，与 `.sv` 同目录，例如 `fifo_sync.sva`
+- `.sva` 不带 `module` / `endmodule`，它会被 include 到模块作用域，可直接引用模块参数、端口和内部信号
+- 在 `endmodule` 前最后一段引入，由 `SVA_ON` 宏开关：
 
 ```systemverilog
-`ifndef SYNTHESIS
-    a_param_w: assert property (
-        initial (DATA_W > 0 && DATA_W <= 1024)
-    ) else $fatal(1, "[%m] DATA_W out of range, got %0d", DATA_W);
+`ifdef SVA_ON
+`include "fifo_sync.sva"
 `endif
+
+endmodule
 ```
 
-> SVA 中的 `initial` 是序列操作符，非过程块。testbench 可用 `initial`。
+- `SVA_ON` 由仿真环境定义；综合工具不定义，断言不参与综合
+- 有 `.sva` 文件就必须 include，不允许留下未引用的孤立文件
+
+### 9.2 参数校验
+
+参数化模块的 `.sva` 应包含参数校验（时间 0 检查一次）；未建 `.sva` 的简单模块可省略：
+
+```systemverilog
+initial begin
+    if (!(DATA_W > 0 && DATA_W <= 1024)) begin
+        $fatal(1, "[%m] DATA_W out of range, got %0d", DATA_W);
+    end
+end
+```
+
+> `.sva` 只在 `SVA_ON` 下参与仿真，不是可综合 RTL，允许 `initial`。
+
+### 9.3 仿真器能力
+
+- iverilog 11 支持 `initial` / `$fatal` / 无标签 immediate assert，但**不支持** `assert property` / `property` 并发断言
+- 并发断言（SVA）使用 verilator `--assert` 或商业仿真器
+- 用 iverilog 做功能仿真时不要定义 `SVA_ON`；SVA 回归用 verilator
 
 ## 10. 可综合性
 
-禁止：`initial` 块、`force/release`、`#delay`、`fork-join`、动态/关联数组、`class`、`$random`（RTL 中）、`casex`。
+禁止：`initial` 块（`.sva` 内的仿真检查除外）、`force/release`、`#delay`、`fork-join`、动态/关联数组、`class`、`$random`（RTL 中）、`casex`。
 
-仿真专用代码用 `` `ifndef SYNTHESIS `` 隔离。
+仿真专用代码用 `` `ifdef SVA_ON `` / `` `ifndef SYNTHESIS `` 隔离。
 
 ## 11. 低功耗
 
@@ -299,28 +342,39 @@ dffr #(.W(W), .RESET_VAL('0)) U_CNT (.clk(clk), .rst_n(rst_n), .en(cnt_en), .d(n
 
 ## 13. 对齐规范
 
-代码按统一列对齐，**幂等**。用 `@vlog-align` / `@inst` / `keep` 标记 + 对齐插件自动对齐。
+代码按统一列对齐，**幂等**。使用 rtl_align 插件的 `:RtlAlign`（普通模式，整个缓冲区）对齐。
 
-### 13.1 标记
+### 13.1 使用方式
 
-| 标记 | 用途 |
-|---|---|
-| `// @vlog-align` | 信号声明块对齐 |
-| `// @inst` | 例化块对齐 |
-| `// keep` | 跳过该行 |
+- 代码中**不写任何对齐标记**（`@vlog-align` / `@inst` / `keep` 一律不使用）
+- vimrc 已把 `g:rtl_align_signal_marker` / `g:rtl_align_inst_marker` 设为空，插件自动识别信号声明块和例化块
+- 普通模式 `:RtlAlign` 一次处理 module 声明、信号声明块、例化块
+- 只对齐选中范围时用可视模式 `,aa`，不要为此加标记
 
 ### 13.2 规则
 
-- 所有列左对齐；列起始 = 上一列结束 + 1 空格，向上取整到 4 的倍数
-- packed 维度 `[MSB:LSB]` 拆 prefix（`[MSB` 左）/ suffix（`:LSB]` 右）
-- 逗号行首：块内首项无逗号，其余项行首逗号
-- 纯注释行不参与对齐
+- 普通列左对齐；列起始 = 上一列结束 + 1 空格，向上取整到 4 的倍数
+- packed 维度 `[MSB:LSB]` 拆 prefix（`[MSB` 左）/ suffix（`:LSB]` 右），维度链内部单空格紧凑
+- **逗号行尾**：块内每项行尾逗号，末项无逗号
+- 纯注释行不参与对齐，也不撑宽列
 - module 声明（parameter + port）自动对齐
+- 对齐后再次执行结果不变
 
 ## 14. 断言
 
-在关键位置加 SVA 断言：接口协议、内部不变量、corner 场景、onehot/stable 检查。从源头消除风险。
+断言写在 `.sva` 里（见 §9），覆盖接口协议、内部不变量、corner 场景、onehot/stable 检查：
+
+```systemverilog
+// fifo_sync.sva
+a_full_count: assert property (
+    @(posedge clk) disable iff (!rst_n) full |-> ((wr_ptr - rd_ptr) == DEPTH)
+);
+
+a_empty_count: assert property (
+    @(posedge clk) disable iff (!rst_n) empty |-> (wr_ptr == rd_ptr)
+);
+```
 
 ## 15. 质量门控
 
-发布前必须通过 `quality_gate.py`（零 error 零 warning），检查：命名、模块头注释、端口/参数规范、参数校验、SVA、寄存器例化、例化连接、禁止 initial、复位风格、testbench/Makefile。
+发布前必须通过 `quality_gate.py --strict`（零 error 零 warning）。脚本位置：本 skill 根目录下的 `scripts/quality_gate.py`。检查项：文件名/模块名一致、模块头注释、SVA_ON include 与 `.sva` 内容、参数校验、可综合性、always/case/复位风格、实例名与例化连接、对齐标记、testbench/Makefile。
