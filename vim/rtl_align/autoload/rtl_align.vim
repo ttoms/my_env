@@ -225,6 +225,10 @@ function! s:parse_signal(line) abort
     if l:type =~# '^\(module\|endmodule\|assign\|always\|always_ff\|always_comb\|always_latch\|function\|endfunction\|task\|endtask\|begin\|end\|if\|else\|for\|while\|case\|endcase\|generate\|endgenerate\|initial\|final\|parameter\|localparam\|input\|output\|inout\|ref\|class\|endclass\|interface\|endinterface\|package\|endpackage\|program\|endprogram\|import\|export\)$'
         return {}
     endif
+    " 带初始化(=)的声明暂不支持，跳过（否则 name 会误取成值、丢数据）
+    if index(l:tokens, '=') >= 0
+        return {}
+    endif
     let l:i = 1
     if l:i < len(l:tokens) && l:tokens[l:i] =~# '^\(signed\|unsigned\)$'
         let l:type .= ' ' . l:tokens[l:i]
@@ -407,11 +411,14 @@ function! s:align_inst_block(start, end) abort
         let l:out = s:align_rows(l:g.rows)
         let l:idx = 0
         for l:lnum in l:g.lnums
+            let l:line = l:out[l:idx]
             if l:idx < l:n
-                call setline(l:lnum, l:out[l:idx] . ',')
-            else
-                call setline(l:lnum, l:out[l:idx])
+                let l:line .= ','
             endif
+            if l:g.rows[l:idx].comment !=# ''
+                let l:line .= ' ' . l:g.rows[l:idx].comment
+            endif
+            call setline(l:lnum, l:line)
             let l:idx += 1
         endfor
     endfor
@@ -699,8 +706,13 @@ function! s:align_inst_lines(lines) abort
                     \ ]
     endfor
     let l:out = s:align_rows(l:rows)
-    for l:i in range(l:n)
-        let l:out[l:i] .= ','
+    for l:i in range(len(l:rows))
+        if l:i < l:n
+            let l:out[l:i] .= ','
+        endif
+        if l:rows[l:i].comment !=# ''
+            let l:out[l:i] .= ' ' . l:rows[l:i].comment
+        endif
     endfor
     return l:out
 endfunction
