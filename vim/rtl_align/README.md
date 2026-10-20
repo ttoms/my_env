@@ -104,10 +104,12 @@ let g:rtl_align_inst_marker = '@inst'
 let g:rtl_align_keep_marker = 'keep'
 " 信号声明块 ≤ 此行数不处理；设为 0 关闭该功能、所有块都处理
 let g:rtl_align_min_signal_lines = 3
+" 正文参数声明块（localparam/parameter）≤ 此行数不处理；设为 0 关闭
+let g:rtl_align_min_para_lines = 3
 ```
 
-> 说明：marker 设为空字符串 `""` 时，对应类型走自动识别（无需在代码里写标记）；`min_signal_lines` 设为 0 时不做行数过滤。这两者互不影响，`min_signal_lines` 在自动识别模式下同样生效。
+> 说明：marker 设为空字符串 `""` 时，对应类型走自动识别（无需在代码里写标记）；`min_signal_lines`/`min_para_lines` 设为 0 时不做行数过滤。这两者互不影响，阈值在自动识别模式下同样生效。
 
 ## 已知限制
 
-暂不支持：行内注释作为对齐列、带初始化的信号声明（`= 8'h00`）、unpacked 数组尾部（`[0:3]`）。这几类行会被跳过不参与对齐。
+暂不支持：把同一行多个声明拆开、或跨行表达式合并成一行（§3.2 的"一条声明/连接一行"）。其余（端口/参数/信号/例化/初始化/unpacked/正文 localparam/行内注释）均已支持。
