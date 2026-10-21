@@ -20,25 +20,40 @@ fi
 
 TS="$(date +%Y%m%d-%H%M%S)"
 
-backup() {
-    local src="$1"
-    local bak="$1.bak.$TS"
-    if [ -L "$src" ]; then
-        # 软链：解引用备份目标内容；只 unlink 软链本体（占用的文件名），不碰 target
-        echo "==> 备份软链 $src → $bak（解引用保留内容）"
-        cp -aL "$src" "$bak" 2>/dev/null || echo "    （悬空软链，无内容可备份）"
-        rm -f "$src"
-    elif [ -e "$src" ]; then
-        # 普通文件/目录：改名即保留内容
-        echo "==> 备份 $src → $bak"
-        mv "$src" "$bak"
+# 备份单个文件：仅当目标与源不同（有用户改动）才备份；与源一致则直接覆盖，避免重复安装 .bak 堆积
+backup_file() {
+    local src="$1"      # repo 源文件
+    local dst="$2"      # 目标（~/.bashrc 等）
+    local bak="$dst.bak.$TS"
+    if [ -L "$dst" ]; then
+        # 软链：解引用备份目标内容；只 unlink 软链本体，不碰 target
+        echo "==> 备份软链 $dst → $bak（解引用保留内容）"
+        cp -aL "$dst" "$bak" 2>/dev/null || echo "    （悬空软链，无内容可备份）"
+        rm -f "$dst"
+    elif [ -e "$dst" ]; then
+        if cmp -s "$src" "$dst"; then
+            echo "==> $dst 与源一致，跳过备份（直接覆盖）"
+            rm -f "$dst"
+        else
+            echo "==> 备份 $dst → $bak"
+            mv "$dst" "$bak"
+        fi
     fi
 }
 
-echo "==> 备份已存在的 ~/.bashrc / ~/.vimrc / ~/.vim（若有）"
-backup "$HOME/.bashrc"
-backup "$HOME/.vimrc"
-backup "$HOME/.vim"
+echo "==> 备份已存在的 ~/.bashrc / ~/.vimrc（仅当有用户改动时）"
+backup_file "$REPO_DIR/bashrc" "$HOME/.bashrc"
+backup_file "$REPO_DIR/vimrc" "$HOME/.vimrc"
+
+# ~/.vim 目录：仅首次（用户自有、无 plug.vim 标记）才整目录备份，此后视为受管目录、跳过备份
+if [ -d "$HOME/.vim" ] && [ ! -e "$HOME/.vim/autoload/plug.vim" ]; then
+    echo "==> 备份用户自有 ~/.vim → $HOME/.vim.bak.$TS"
+    mv "$HOME/.vim" "$HOME/.vim.bak.$TS"
+elif [ -L "$HOME/.vim" ]; then
+    echo "==> 备份软链 ~/.vim → $HOME/.vim.bak.$TS（解引用保留内容）"
+    cp -aL "$HOME/.vim" "$HOME/.vim.bak.$TS" 2>/dev/null || true
+    rm -f "$HOME/.vim"
+fi
 
 echo "==> 复制 bashrc → ~/.bashrc"
 cp "$REPO_DIR/bashrc" "$HOME/.bashrc"
