@@ -312,7 +312,9 @@ function! s:align_module_params(start, end) abort
     let l:out = s:align_rows(l:rows)
     let l:idx = 0
     for l:lnum in l:lnums
-        call setline(l:lnum, l:out[l:idx])
+        if getline(l:lnum) !=# l:out[l:idx]
+            call setline(l:lnum, l:out[l:idx])
+        endif
         let l:idx += 1
     endfor
 endfunction
@@ -359,7 +361,9 @@ function! s:align_module_ports(start, end) abort
     let l:out = s:align_rows(l:rows)
     let l:idx = 0
     for l:lnum in l:lnums
-        call setline(l:lnum, l:out[l:idx])
+        if getline(l:lnum) !=# l:out[l:idx]
+            call setline(l:lnum, l:out[l:idx])
+        endif
         let l:idx += 1
     endfor
 endfunction
@@ -463,7 +467,9 @@ function! s:align_inst_block(start, end) abort
             if l:r.comment !=# ''
                 let l:line .= repeat(' ', l:ccol - len(l:line)) . l:r.comment
             endif
-            call setline(l:lnum, l:line)
+            if getline(l:lnum) !=# l:line
+                call setline(l:lnum, l:line)
+            endif
             let l:idx += 1
         endfor
     endfor
@@ -553,7 +559,9 @@ function! s:align_para_block(lines, lnums) abort
     if empty(l:out) | return | endif
     let l:idx = 0
     for l:lnum in a:lnums
-        call setline(l:lnum, l:out[l:idx])
+        if getline(l:lnum) !=# l:out[l:idx]
+            call setline(l:lnum, l:out[l:idx])
+        endif
         let l:idx += 1
     endfor
 endfunction
@@ -772,7 +780,9 @@ function! s:align_signal_block(lines, lnums) abort
     if empty(l:out) | return | endif
     let l:idx = 0
     for l:lnum in a:lnums
-        call setline(l:lnum, l:out[l:idx])
+        if getline(l:lnum) !=# l:out[l:idx]
+            call setline(l:lnum, l:out[l:idx])
+        endif
         let l:idx += 1
     endfor
 endfunction
@@ -817,7 +827,9 @@ function! rtl_align#align_range(line1, line2, ...) abort
 
     let l:idx = 0
     for l:lnum in l:lnums
-        call setline(l:lnum, l:out[l:idx])
+        if getline(l:lnum) !=# l:out[l:idx]
+            call setline(l:lnum, l:out[l:idx])
+        endif
         let l:idx += 1
     endfor
     call winrestview(l:view)
