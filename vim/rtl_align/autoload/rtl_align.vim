@@ -218,6 +218,8 @@ function! s:parse_signal(line) abort
     let l:body = substitute(l:code, '^\s*', '', '')
     if l:body !~# ';\s*$' | return {} | endif
     let l:body = substitute(l:body, ';\s*$', '', '')
+    " 归一化方括号内空格：[W - 1 : 0] → [W-1:0]，否则 split() 会把维度拆碎、误判信号名
+    let l:body = substitute(l:body, '\[[^]]*\]', '\=substitute(submatch(0), " ", "", "g")', 'g')
     let l:tokens = split(l:body)
     if empty(l:tokens) | return {} | endif
     let l:type = l:tokens[0]
