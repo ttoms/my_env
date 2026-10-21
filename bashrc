@@ -24,6 +24,7 @@ shopt -s checkwinsize        # 换行自适应
 alias ll='ls -alF'
 alias la='ls -A'
 alias l='ls -CF'
+alias h='history'
 alias ..='cd ..'
 alias ...='cd ../..'
 alias ....='cd ../../..'
@@ -40,7 +41,6 @@ alias egrep='egrep --color=auto'
 alias fgrep='fgrep --color=auto'
 
 # git
-alias g='gvim'
 alias gs='git status -sb'
 alias gl='git log --oneline --graph --decorate -20'
 alias gd='git diff'
