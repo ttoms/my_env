@@ -471,6 +471,7 @@ endfunction
 function! s:parse_para(line) abort
     if s:is_keep(a:line) | return {} | endif
     let [l:code, l:comment] = s:extract_comment(a:line)
+    if l:code !~# ';\s*$' | return {} | endif
     let l:code = substitute(l:code, ';\s*$', '', '')
     let l:indent = matchstr(l:code, '^\s*')
     let l:body = substitute(l:code, '^\s*', '', '')
