@@ -50,7 +50,7 @@ syntax on
 filetype plugin indent on
 set encoding=utf-8
 set number
-set relativenumber
+" set relativenumber
 set cursorline
 set wrap
 set linebreak
@@ -88,6 +88,10 @@ set ruler
 set showmode
 set cmdheight=2
 set hidden
+" 不生成 .swp 交换文件：消除工作目录里的 .swp 和"swap file exists"提示。
+" 代价：崩溃/断连时无法恢复未保存改动（有 git 兜底即可接受）。
+" 若想保留崩溃恢复、只是不想 .swp 散落目录，改用：set directory=~/.vim/swap//
+set noswapfile
 
 " ---- 文件类型特定缩进 ----
 autocmd FileType verilog,systemverilog setlocal tabstop=4 shiftwidth=4 softtabstop=4
@@ -213,6 +217,17 @@ vnoremap <C-c> "+y
 vnoremap <C-x> "+d
 
 " 粘贴：p / "+p（Ctrl+V 保留为默认块选择）
+
+" ---- 窗口 / 标签页（浏览器风格）----
+" Ctrl+W：关闭当前窗口/文件（:q）。
+"   注意：这会覆盖 Vim 默认 <C-w> 窗口命令前缀，<C-w>s / <C-w>v（分屏创建）不再生效；
+"   分屏导航仍可用下面的 <C-h/j/k/l>。
+nnoremap <C-w> :q<CR>
+" Ctrl+T：开空 buffer 并打开 NERDTree 选文件（覆盖 Vim 默认 <C-t> tag 栈回退）。
+nnoremap <C-t> :enew<CR>:NERDTreeFocus<CR>
+" 分屏创建（替代被覆盖的 <C-w>s / <C-w>v）：,h 横向 / ,v 纵向
+nnoremap <silent> <leader>h :split<CR>
+nnoremap <silent> <leader>v :vsplit<CR>
 
 " ============================================================
 "  其他快捷键
