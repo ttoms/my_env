@@ -171,8 +171,13 @@ vnoremap <silent> <leader>am <Plug>(rtl-align-module)
 vnoremap <silent> <leader>as <Plug>(rtl-align-signal)
 vnoremap <silent> <leader>ai <Plug>(rtl-align-inst)
 
-" MUcomplete：链式补全（路径→omni→关键词→词典→拼写），Tab 触发
+" MUcomplete：链式补全（路径→omni→关键词→词典→拼写）
 set completeopt+=menuone
+" 用 Ctrl-N/Ctrl-P 触发（Tab 保留默认缩进，避免"输 Tab 被误判为补全"）
+silent! iunmap <Tab>
+silent! iunmap <S-Tab>
+imap <C-n> <plug>(MUcompleteFwd)
+imap <C-p> <plug>(MUcompleteBwd)
 
 " NERDTree
 nnoremap <C-n> :NERDTreeToggle<CR>              " 打开/关闭（Ctrl+n）
