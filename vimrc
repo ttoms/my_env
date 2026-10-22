@@ -37,6 +37,9 @@ Plug 'RRethy/vim-illuminate'
 " rtl_align 对齐插件
 Plug '~/.vim/plugged/rtl_align'
 
+" 链式补全（路径→omni→关键词→词典→拼写，Tab 触发）
+Plug 'lifepillar/vim-mucomplete'
+
 " 后续可选：
 " Plug 'junegunn/fzf.vim'                      " 模糊查找（需 fzf 二进制）
 " Plug 'neoclide/coc.nvim'                     " LSP 补全（需 node）
@@ -167,6 +170,9 @@ vnoremap <silent> <leader>aa <Plug>(rtl-align-block)
 vnoremap <silent> <leader>am <Plug>(rtl-align-module)
 vnoremap <silent> <leader>as <Plug>(rtl-align-signal)
 vnoremap <silent> <leader>ai <Plug>(rtl-align-inst)
+
+" MUcomplete：链式补全（路径→omni→关键词→词典→拼写），Tab 触发
+set completeopt+=menuone
 
 " NERDTree
 nnoremap <C-n> :NERDTreeToggle<CR>              " 打开/关闭（Ctrl+n）
