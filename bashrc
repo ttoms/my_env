@@ -21,18 +21,26 @@ shopt -s cmdhist             # 多行命令存为一条
 shopt -s checkwinsize        # 换行自适应
 
 # ---- 常用别名 ----
-alias ll='ls -alF'
-alias la='ls -A'
-alias l='ls -CF'
+# ls 颜色（GNU 用 --color=auto，BSD/macOS 用 -G）
+if ls --color=auto -d . >/dev/null 2>&1; then
+    alias ls='ls --color=auto'
+    alias ll='ls -alF --color=auto'
+    alias la='ls -A --color=auto'
+    alias l='ls -CF --color=auto'
+else
+    alias ls='ls -G'
+    alias ll='ls -alFG'
+    alias la='ls -AG'
+    alias l='ls -CFG'
+fi
 alias h='history'
 alias ..='cd ..'
 alias ...='cd ../..'
 alias ....='cd ../../..'
 alias mkdir='mkdir -pv'
 
-# 防止误操作（覆盖/删除需确认）
+# 防止误操作（删除/覆盖需确认）
 alias rm='rm -i'
-alias cp='cp -i'
 alias mv='mv -i'
 
 # grep 高亮
