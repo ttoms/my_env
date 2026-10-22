@@ -51,8 +51,6 @@ alias fgrep='fgrep --color=auto'
 # git
 alias gs='git status -sb'
 alias gl='git log --oneline --graph --decorate -20'
-alias gd='git diff'
-alias gdc='git diff --cached'
 alias ga='git add'
 alias gc='git commit'
 alias gcm='git commit -m'
@@ -68,10 +66,16 @@ alias du='du -h'
 # vim 相关
 alias v='vim'
 alias vi='vim'
-# GUI vim：Linux 用 gvim，Mac 用 mvim（MacVim）
+# GUI vim：Linux 用 gvim/gvimdiff，Mac 用 mvim/mvimdiff（MacVim）
 case "$(uname -s)" in
-    Darwin) alias g='mvim' ;;
-    *)      alias g='gvim' ;;
+    Darwin)
+        alias g='mvim'
+        alias gd='mvimdiff'
+        ;;
+    *)
+        alias g='gvim'
+        alias gd='gvimdiff'
+        ;;
 esac
 alias vc='vim ~/.bashrc'       # 编辑 bashrc
 alias sc='source ~/.bashrc'    # 重新加载 bashrc
