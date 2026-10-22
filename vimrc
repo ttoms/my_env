@@ -14,8 +14,8 @@ Plug 'joshdick/onedark.vim'
 
 " 文件树
 Plug 'preservim/nerdtree'
-" git 集成
-Plug 'tpope/vim-fugitive'
+" git 集成（vim 里看 git diff 没必要且慢，已停用）
+" Plug 'tpope/vim-fugitive'
 " 状态栏
 Plug 'vim-airline/vim-airline'
 Plug 'vim-airline/vim-airline-themes'
