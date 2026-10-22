@@ -171,13 +171,8 @@ vnoremap <silent> <leader>am <Plug>(rtl-align-module)
 vnoremap <silent> <leader>as <Plug>(rtl-align-signal)
 vnoremap <silent> <leader>ai <Plug>(rtl-align-inst)
 
-" MUcomplete：链式补全（路径→omni→关键词→词典→拼写），自动弹出 + 方向键选择
+" MUcomplete：链式补全（路径→omni→关键词→词典→拼写），Tab 触发
 set completeopt+=menuone
-set completeopt+=noselect        " 不自动选第一项，由方向键选择
-let g:mucomplete#enable_auto_at_startup = 1
-" Tab 不参与选择（保留缩进）；方向键 ↑↓ 选择、Enter 确认（Vim 原生 popup 支持）
-silent! iunmap <Tab>
-silent! iunmap <S-Tab>
 
 " NERDTree
 nnoremap <C-n> :NERDTreeToggle<CR>              " 打开/关闭（Ctrl+n）
