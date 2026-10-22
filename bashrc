@@ -68,6 +68,11 @@ alias du='du -h'
 # vim 相关
 alias v='vim'
 alias vi='vim'
+# GUI vim：Linux 用 gvim，Mac 用 mvim（MacVim）
+case "$(uname -s)" in
+    Darwin) alias g='mvim' ;;
+    *)      alias g='gvim' ;;
+esac
 alias vc='vim ~/.bashrc'       # 编辑 bashrc
 alias sc='source ~/.bashrc'    # 重新加载 bashrc
 alias vrc='vim ~/.vimrc'       # 编辑 vimrc
