@@ -171,8 +171,10 @@ vnoremap <silent> <leader>am <Plug>(rtl-align-module)
 vnoremap <silent> <leader>as <Plug>(rtl-align-signal)
 vnoremap <silent> <leader>ai <Plug>(rtl-align-inst)
 
-" MUcomplete：链式补全（路径→omni→关键词→词典→拼写），Tab 触发
+" MUcomplete：链式补全（路径→omni→关键词→词典→拼写），自动弹出 + Tab/方向键选择
 set completeopt+=menuone
+set completeopt+=noselect        " 不自动选第一项
+let g:mucomplete#enable_auto_at_startup = 1
 
 " NERDTree
 nnoremap <C-n> :NERDTreeToggle<CR>              " 打开/关闭（Ctrl+n）
@@ -249,7 +251,7 @@ nnoremap <C-l> <C-w>l
 nnoremap <silent> <leader>l :nohlsearch<CR>
 
 " 重新加载 vimrc（,sv）
-nnoremap <silent> <leader>sv :source $MYVIMRC<CR>
+nnoremap <silent> <leader>sv :source ~/.vimrc<CR>
 
 " ---- 本机专属配置 ----
 if filereadable(expand("~/.vimrc_local"))
