@@ -14,15 +14,15 @@ Plug 'joshdick/onedark.vim'
 
 " 文件树
 Plug 'preservim/nerdtree'
-" git 集成（vim 里看 git diff 没必要且慢，已停用）
-" Plug 'tpope/vim-fugitive'
+" git 集成（:Gdiffsplit / :Gvdiffsplit 分屏看 diff）
+Plug 'tpope/vim-fugitive'
 " 状态栏
 Plug 'vim-airline/vim-airline'
 Plug 'vim-airline/vim-airline-themes'
 " SystemVerilog 语法/缩进
 Plug 'vhda/verilog_systemverilog.vim'
-" git 改动标记（gutter）
-Plug 'airblade/vim-gitgutter'
+" git 改动标记（gutter，+/- 标记每次保存自动 git diff 慢，已停用）
+" Plug 'airblade/vim-gitgutter'
 " 自动文件头
 Plug 'alpertuna/vim-header'
 " 对齐
@@ -185,9 +185,9 @@ highlight IlluminatedWordText  guibg=#4b5263 ctermbg=239
 let g:airline_theme = 'onedark'
 let g:airline_powerline_fonts = 0
 
-" gitgutter：跳转改动块
-nmap ]h <Plug>(GitGutterNextHunk)
-nmap [h <Plug>(GitGutterPrevHunk)
+" gitgutter：跳转改动块（已停用）
+" nmap ]h <Plug>(GitGutterNextHunk)
+" nmap [h <Plug>(GitGutterPrevHunk)
 
 " vim-header：F4 添加/更新文件头
 " 作者名等个人信息放 ~/.vimrc_local（不进公开仓库）：
