@@ -9,8 +9,9 @@ set nocompatible
 " ============================================================
 call plug#begin('~/.vim/plugged')
 
-" 主题
+" 主题（默认 tokyonight，可 ,co 切 onedark）
 Plug 'joshdick/onedark.vim'
+Plug 'ghifarit53/tokyonight-vim'
 
 " 文件树
 Plug 'preservim/nerdtree'
@@ -145,10 +146,35 @@ if has("gui_running")
 endif
 
 " ---- 主题 ----
-" onedark 未安装时（首次 PlugInstall 前）不报 E185，静默跳过
-if !empty(globpath(&rtp, 'colors/onedark.vim'))
-    colorscheme onedark
+" 默认 tokyonight；未安装时回退 onedark（两者都 vendor 在仓库里，离线可装）
+" 手动切换：,ct = tokyonight，,co = onedark
+let g:tokyonight_style = 'night'                " night / storm / day
+let g:tokyonight_disable_italic_comment = 0
+let g:tokyonight_sidebars = ['nerdtree']
+
+function! s:apply_theme(name) abort
+    if empty(globpath(&rtp, 'colors/' . a:name . '.vim'))
+        echo 'colorscheme not found: ' . a:name
+        return 0
+    endif
+    execute 'colorscheme ' . a:name
+    " airline 状态栏跟随主题
+    let l:airline = a:name ==# 'tokyonight' ? 'tokyonight' : 'onedark'
+    if !empty(globpath(&rtp, 'autoload/airline/themes/' . l:airline . '.vim'))
+        let g:airline_theme = l:airline
+        if exists(':AirlineTheme') == 2
+            execute 'AirlineTheme ' . l:airline
+        endif
+    endif
+    return 1
+endfunction
+
+if !s:apply_theme('tokyonight')
+    call s:apply_theme('onedark')
 endif
+
+nnoremap <silent> <leader>ct :call <SID>apply_theme('tokyonight')<CR>
+nnoremap <silent> <leader>co :call <SID>apply_theme('onedark')<CR>
 
 " ============================================================
 "  插件配置
@@ -189,8 +215,7 @@ autocmd BufEnter * if winnr('$') == 1 && exists('b:NERDTree') && b:NERDTree.isTa
 highlight IlluminatedWord      guibg=#4b5263 ctermbg=239
 highlight IlluminatedWordText  guibg=#4b5263 ctermbg=239
 
-" airline：匹配 onedark
-let g:airline_theme = 'onedark'
+" airline：主题由上方 s:apply_theme() 动态设置（随 colorscheme 切换）
 let g:airline_powerline_fonts = 0
 
 " gitgutter：跳转改动块（已停用）
