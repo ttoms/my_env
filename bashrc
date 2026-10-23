@@ -11,6 +11,15 @@ export LC_ALL=en_US.UTF-8
 # 禁用终端流控（让 vim 的 Ctrl+S/Ctrl+Q 生效，而非挂起输出）
 stty -ixon 2>/dev/null
 
+# macOS 终端真彩色：vim 的 termguicolors 依赖 $COLORTERM=truecolor
+# 注意：macOS 自带 Terminal.app 不支持 truecolor，强开会让 onedark 底色异常（全蓝），故排除
+if [ "$(uname -s)" = "Darwin" ] && [ -z "$COLORTERM" ]; then
+    case "$TERM_PROGRAM" in
+        Apple_Terminal) ;;   # Terminal.app 不支持，保持 256 色
+        *) export COLORTERM=truecolor ;;
+    esac
+fi
+
 # ---- 历史记录 ----
 export HISTSIZE=100000
 export HISTFILESIZE=200000

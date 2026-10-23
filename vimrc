@@ -126,11 +126,11 @@ let mapleader = ","
 " ============================================================
 if has("gui_running")
     " 去掉工具栏/菜单栏/滚动条，界面更简洁
-    set guioptions-=T   " 工具栏
-    set guioptions-=m   " 菜单栏
-    set guioptions-=r   " 右侧滚动条
-    set guioptions-=L   " 左侧滚动条
-    set guioptions-=e   " 图形 tab
+    " set guioptions-=T   " 工具栏
+    " set guioptions-=m   " 菜单栏
+    " set guioptions-=r   " 右侧滚动条
+    " set guioptions-=L   " 左侧滚动条
+    " set guioptions-=e   " 图形 tab
 
     " 字体
     if has("gui_macvim")
