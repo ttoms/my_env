@@ -134,6 +134,8 @@ endmodule
 
 信号声明顺序与逻辑赋值顺序一致。
 
+文件首行写 `` `default_nettype none ``，末尾写 `` `default_nettype wire ``，避免隐式网络掩盖拼写错误。参考 `templates/` 下的模板。
+
 ### 4.2 模块头注释（每个文件顶部必须有）
 
 ```systemverilog
@@ -169,15 +171,16 @@ endmodule
 ### 5.3 复位
 
 - 默认异步复位、同步释放，低有效 `rst_n`
+- **控制类寄存器必须复位**：状态机、计数器、指针、valid/ready、配置、错误标志
+- **数据通路寄存器不复位**：流水线数据、FIFO 存储体、宽总线；避免复位树面积和布线开销
+- 异步复位输入统一经 `rst_sync` 同步释放后再送各模块
 
 ```systemverilog
-always_ff @(posedge clk or negedge rst_n) begin
-    if (!rst_n) begin
-        // 复位
-    end else begin
-        // 时序逻辑
-    end
-end
+// 控制寄存器：dffr
+dffr #(.W(W), .RESET_VAL('0)) U_CTRL (.clk(clk), .rst_n(rst_n), .en(en), .d(nxt), .q(cur));
+
+// 数据通路寄存器：dff（无复位）
+dff  #(.W(W))                 U_DATA (.clk(clk), .en(en), .d(nxt), .q(cur));
 ```
 
 > 有统一 DFF 单元时，业务模块不直接写 `always_ff`，寄存器一律按 §7 例化；上面的写法仅用于无 DFF 单元的场景或 DFF 单元自身实现。
@@ -226,7 +229,14 @@ end
 
 ### 7.1 推荐：统一 DFF 单元例化
 
-项目提供带显式 `en` 使能的 DFF 单元时，寄存器一律通过它例化，禁止在业务模块直接写 `always_ff`。理由：显式 `en` 让综合工具精准插入时钟门控（ICG），并保证寄存器风格统一。
+项目提供 DFF 单元时，寄存器一律通过它例化，禁止在业务模块直接写 `always_ff`。按用途选单元：
+
+| 单元 | 用途 | 复位 |
+|---|---|---|
+| `dffr` | 状态机、计数器、指针、valid/ready、配置 | 异步复位 |
+| `dff` | 流水线数据、FIFO 存储体、宽总线 | 无复位 |
+
+理由：显式 `en` 让综合工具精准插入时钟门控（ICG）；数据通路不复位可显著减小复位树面积和布线压力。
 
 ```systemverilog
 logic   [W-1:0]  cnt     ;
@@ -262,7 +272,8 @@ dffr #(
 ### 7.4 存储体
 
 - 用 DFF 数组例化（generate 循环），不用 `always_ff` 写 RAM
-- 大深度建议专用 SRAM
+- 存储体用无复位 `dff`，避免为每位数据接复位
+- 大深度建议专用 SRAM，并按工艺库要求包装（读写时序、时钟门控、BIST）
 
 ## 8. 例化连接规则
 
@@ -332,6 +343,7 @@ end
 
 - 统一 DFF 例化 + 显式 `en` → 精准插 ICG
 - 状态寄存器 `en = (nxt != cur)` 空闲关时钟
+- 数据通路寄存器不复位，减小复位树翻转与布线
 - 时钟门控用标准门控单元，禁止手工 latch+AND
 - 未使用数据通路加使能隔离（操作数隔离）
 
@@ -377,4 +389,23 @@ a_empty_count: assert property (
 
 ## 15. 质量门控
 
-发布前必须通过 `quality_gate.py --strict`（零 error 零 warning）。脚本位置：本 skill 根目录下的 `scripts/quality_gate.py`。检查项：文件名/模块名一致、模块头注释、SVA_ON include 与 `.sva` 内容、参数校验、可综合性、always/case/复位风格、实例名与例化连接、对齐标记、testbench/Makefile。
+发布前必须通过 `quality_gate.py --strict --lint`（零 error 零 warning）。脚本位置：本 skill 根目录下的 `scripts/quality_gate.py`。
+
+- `--strict`：warning 也视为失败
+- `--lint`：调用 `verilator --lint-only -Wall`，检查位宽截断、多驱动、latch、组合环、时序块阻塞赋值等门控脚本无法覆盖的语义问题
+- verilator 未安装时 lint 直接判失败；验证报告必须写“lint 未执行”，不得声称 lint-clean
+- 文本检查项：文件名/模块名一致、模块头注释、SVA_ON include 与 `.sva` 内容、参数校验、可综合性、always/case/复位风格、实例名与例化连接、对齐标记、testbench/Makefile
+
+## 16. 参考模板
+
+`templates/` 提供可直接复制的骨架，全部通过 iverilog 编译与 `quality_gate.py --strict`：
+
+| 文件 | 用途 |
+|---|---|
+| `dff.sv` | 无复位数据通路寄存器（显式 en） |
+| `dffr.sv` | 异步复位 + 显式 en 寄存器 |
+| `rst_sync.sv` / `.sva` | 异步复位、同步释放 |
+| `cdc_2ff.sv` / `.sva` | 单 bit 跨时钟域同步 |
+| `fifo_sync.sv` / `.sva` / `_tb.sv` / `Makefile` | 同步 FIFO 参考实现 |
+
+复制后按项目实际 DFF 单元端口名调整；模板默认 `` `default_nettype none ``。

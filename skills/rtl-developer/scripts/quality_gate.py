@@ -12,9 +12,10 @@ RTL 模块质量门控检查
   7. 例化实例名与端口连接规范
   8. 对齐标记禁用
   9. Testbench / Makefile
+ 10. verilator lint（--lint，安装 verilator 时）
 
 用法：
-  python3 quality_gate.py <rtl_file.sv> [tb_file.sv] [--strict] [--dff-cell NAME]
+  python3 quality_gate.py <rtl_file.sv> [tb_file.sv] [--strict] [--lint] [--dff-cell NAME]
 
 退出码：
   0 - 无 error（--strict 时还要求无 warning）
@@ -23,6 +24,8 @@ RTL 模块质量门控检查
 
 import argparse
 import re
+import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -205,11 +208,16 @@ def expr_is_connection_safe(expr: str) -> bool:
 
 
 class QualityGate:
-    def __init__(self, rtl_path, tb_path=None, strict=False, dff_cell=None):
+    CONTROL_SIG_RE = re.compile(
+        r"(^|_)(st|cnt|ptr|vld|rdy|en|err|ack|req|sts|state|full|empty)$")
+
+    def __init__(self, rtl_path, tb_path=None, strict=False, dff_cell=None,
+                 lint=False):
         self.rtl_path = Path(rtl_path)
         self.tb_path = Path(tb_path) if tb_path else None
         self.strict = strict
         self.dff_cell = dff_cell
+        self.lint = lint
         self.errors = []
         self.warnings = []
         self.passed = []
@@ -253,6 +261,8 @@ class QualityGate:
         self._check_ports(code)
         self._check_markers(raw)
         self._check_tb_makefile()
+        if self.lint:
+            self._run_lint()
 
         print("\n" + "=" * 64)
         print("RESULTS")
@@ -494,18 +504,98 @@ class QualityGate:
         if not bad:
             self._pass("例化端口连接规范（无逻辑运算式）")
 
+    @staticmethod
+    def _block_body(code, pos):
+        """返回 pos 之后 begin/end 块的内容；无 begin 时返回单条语句。"""
+        m = re.search(r"\bbegin\b", code[pos:])
+        if not m:
+            semi = code.find(";", pos)
+            return code[pos:semi] if semi >= 0 else ""
+        base = pos + m.end()
+        depth = 1
+        for t in re.finditer(r"\b(begin|end)\b", code[base:]):
+            if t.group(1) == "begin":
+                depth += 1
+            else:
+                depth -= 1
+                if depth == 0:
+                    return code[base:base + t.start()]
+        return code[base:]
+
     def _check_always_style(self, code):
-        ffs = list(re.finditer(r"always_ff\s*@\s*\(([^)]*)\)", code))
-        if not ffs:
+        blocks = list(re.finditer(r"always_ff\s*@\s*\(([^)]*)\)", code))
+        if not blocks:
             return
-        for m in ffs:
+
+        async_cnt = sync_cnt = data_no_rst = 0
+        ctrl_no_rst = []
+        for m in blocks:
             ev = m.group(1)
             if "negedge" in ev:
-                self._pass("使用异步复位")
-            elif re.search(r"\brst", ev):
-                self._warn(f"L{self._line(code, m.start())}: 使用同步复位，确认是否符合需求")
+                async_cnt += 1
+                continue
+            if re.search(r"\brst", ev):
+                sync_cnt += 1
+                continue
+            body = self._block_body(code, m.end())
+            lhs = re.findall(r"([A-Za-z_]\w*)\s*(?:\[[^\]]*\]\s*)?<=", body)
+            ctrl = sorted({s for s in lhs if self.CONTROL_SIG_RE.search(s)})
+            if ctrl:
+                ctrl_no_rst.append((self._line(code, m.start()), ctrl))
             else:
-                self._warn(f"L{self._line(code, m.start())}: 时序逻辑未带复位")
+                data_no_rst += 1
+
+        if async_cnt:
+            self._pass(f"使用异步复位（{async_cnt} 个 always_ff）")
+        if sync_cnt:
+            self._warn(f"{sync_cnt} 个 always_ff 使用同步复位，确认是否符合复位策略")
+        for line, sigs in ctrl_no_rst:
+            self._warn(f"L{line}: 时序块未带复位，控制类信号 {', '.join(sigs)} 建议复位")
+        if data_no_rst:
+            self._pass(f"无复位数据通路寄存器（{data_no_rst} 个 always_ff，PPA 友好）")
+
+    def _run_lint(self):
+        exe = shutil.which("verilator")
+        if not exe:
+            self._fail("已请求 lint，但未找到 verilator（安装：brew install verilator）")
+            return
+
+        cmd = [
+            exe, "--lint-only", "-Wall", "-Wno-fatal",
+            "--top-module", self.rtl_path.stem,
+            f"-I{self.rtl_path.parent}",
+            str(self.rtl_path),
+        ]
+        try:
+            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            self._fail(f"lint 执行失败：{exc}")
+            return
+
+        output = (proc.stdout or "") + (proc.stderr or "")
+        findings = []
+        for line in output.splitlines():
+            m = re.match(r"%(Warning|Error)-(\w+):\s*(.*)", line.strip())
+            if m:
+                findings.append((m.group(1), m.group(2), m.group(3)))
+
+        if findings:
+            for kind, code, detail in findings[:20]:
+                msg = f"LINT {kind}-{code}: {detail}"
+                if kind == "Error":
+                    self._fail(msg)
+                else:
+                    self._warn(msg)
+            if len(findings) > 20:
+                self._warn(f"另有 {len(findings) - 20} 条 lint 信息未列出")
+            return
+
+        if proc.returncode != 0:
+            tail = " ".join(output.split())[-400:]
+            self._fail(f"lint 执行异常（exit {proc.returncode}）：{tail}")
+            return
+
+        self._pass("verilator lint 通过（-Wall）")
 
     def _module_port_text(self, code):
         m = re.search(r"(?m)^[ \t]*module\s+\w+", code)
@@ -597,10 +687,12 @@ def main():
     parser.add_argument("rtl", help="RTL 源文件（.sv）")
     parser.add_argument("tb", nargs="?", help="Testbench 文件（可选）")
     parser.add_argument("--strict", action="store_true", help="warning 也视为失败")
+    parser.add_argument("--lint", action="store_true",
+                        help="调用 verilator --lint-only -Wall 做语义 lint")
     parser.add_argument("--dff-cell", default=None, help="统一 DFF 单元模块名")
     args = parser.parse_args()
 
-    gate = QualityGate(args.rtl, args.tb, args.strict, args.dff_cell)
+    gate = QualityGate(args.rtl, args.tb, args.strict, args.dff_cell, args.lint)
     sys.exit(0 if gate.check() else 1)
 
 

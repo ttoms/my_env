@@ -1,0 +1,24 @@
+initial begin
+    if (!(DATA_W > 0 && DATA_W <= 1024)) begin
+        $fatal(1, "[%m] DATA_W out of range, got %0d", DATA_W);
+    end
+    if (!(DEPTH >= 2 && (DEPTH & (DEPTH - 1)) == 0)) begin
+        $fatal(1, "[%m] DEPTH must be a power of two >= 2, got %0d", DEPTH);
+    end
+end
+
+a_empty_no_valid: assert property (
+    @(posedge clk) disable iff (!rst_n) empty |-> (entry_vld == '0)
+);
+
+a_full_all_valid: assert property (
+    @(posedge clk) disable iff (!rst_n) full |-> (&entry_vld)
+);
+
+a_wr_ptr_stable: assert property (
+    @(posedge clk) disable iff (!rst_n) (!wr_en) |=> (wr_ptr == $past(wr_ptr))
+);
+
+a_rd_ptr_stable: assert property (
+    @(posedge clk) disable iff (!rst_n) (!rd_en) |=> (rd_ptr == $past(rd_ptr))
+);

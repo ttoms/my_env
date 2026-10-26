@@ -16,7 +16,8 @@ my_env/
 │   └── rtl-developer/          # RTL 开发编排 skill
 │       ├── SKILL.md            # 编排：架构先行 → 开发 → 验证
 │       ├── references/rtl-coding-standard.md   # 通用 RTL 编码规范
-│       └── scripts/quality_gate.py             # 质量门控脚本
+│       ├── templates/          # DFF/复位同步/CDC/同步 FIFO 参考模板
+│       └── scripts/quality_gate.py             # 质量门控脚本（文本检查 + verilator lint）
 ├── agents/       # Claude Code subagent
 │   ├── rtl-architect.md        # 架构师（方案）
 │   ├── rtl-developer.md        # 开发（实现）
@@ -75,9 +76,12 @@ bash install.sh --offline    # 离线安装（用 vim/vendor/ 打包的插件源
 
 通用 RTL 开发体系：一个编排 skill + 3 个 subagent，复杂模块架构先行。
 
-- **skill** `skills/rtl-developer/`：编排「架构师出方案 → 用户确认 → 开发实现 → 验证闭环」，自带编码规范 + 质量门控脚本
+- **skill** `skills/rtl-developer/`：编排「架构师出方案 → 用户确认 → 开发实现 → 验证闭环」，自带编码规范 + 模板库 + 质量门控脚本
 - **agent** `agents/rtl-architect.md`（架构方案）/ `rtl-developer.md`（实现）/ `rtl-verifier.md`（验证）
 - **编码规范** `skills/rtl-developer/references/rtl-coding-standard.md`：命名/风格/对齐/寄存器例化/`.sva` 断言/可综合性/质量门控
+- **模板库** `skills/rtl-developer/templates/`：`dffr`（控制类复位）、`dff`（数据通路无复位）、`rst_sync`（复位同步释放）、`cdc_2ff`（单 bit CDC）、`fifo_sync`（RTL+TB+SVA+Makefile 完整示例）
+- **PPA 复位策略**：控制类寄存器（状态/计数/指针/valid）必须复位，数据通路寄存器不复位，减小复位树
+- **验证门控** `scripts/quality_gate.py <rtl> <tb> --strict --lint`：文本规则检查 + `verilator --lint-only -Wall`；无 verilator 时脚本报 lint 未执行，不得声称 lint-clean
 - **断言约定**：模块 `.sv` 内不写断言；需要断言时建同名 `<module>.sva`（简单模块可省略），在 `endmodule` 前由 `SVA_ON` include；代码中不加对齐标记，统一 `:RtlAlign`
 
 ### 安装到 Claude Code

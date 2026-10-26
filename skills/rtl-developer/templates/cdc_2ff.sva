@@ -1,0 +1,5 @@
+initial begin
+    if (!(STAGES >= 2 && STAGES <= 8)) begin
+        $fatal(1, "[%m] STAGES must be in [2, 8], got %0d", STAGES);
+    end
+end

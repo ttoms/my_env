@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """quality_gate.py 回归测试（不依赖 iverilog / verilator）。"""
 
+import os
 import subprocess
 import sys
 import tempfile
@@ -25,11 +26,13 @@ def write(path: Path, text: str):
     path.write_text(textwrap.dedent(text).lstrip(), encoding="utf-8")
 
 
-def run_gate(rtl: Path, strict: bool = False):
+def run_gate(rtl: Path, strict: bool = False, lint: bool = False, env=None):
     cmd = [sys.executable, str(GATE), str(rtl)]
     if strict:
         cmd.append("--strict")
-    return subprocess.run(cmd, capture_output=True, text=True)
+    if lint:
+        cmd.append("--lint")
+    return subprocess.run(cmd, capture_output=True, text=True, env=env)
 
 
 class GateTest(unittest.TestCase):
@@ -136,6 +139,88 @@ class GateTest(unittest.TestCase):
         r = run_gate(self.dir / "simple_sync.sv")
         self.assertNotEqual(r.returncode, 0)
         self.assertIn("没有用 SVA_ON include 引入", r.stdout)
+
+    def make_seq(self, name="seq_mod", body="", with_tb=True):
+        header = HEADER.format(name=name, params="none")
+        write(self.dir / f"{name}.sv", header + f"""\
+            module {name} (
+                input   logic       clk,
+                input   logic       rst_n,
+                input   logic [7:0] din,
+                output  logic [7:0] dout
+            );
+            {body}
+            endmodule
+            """)
+        if with_tb:
+            write(self.dir / f"{name}_tb.sv", f"module {name}_tb;\nendmodule\n")
+        write(self.dir / "Makefile", "all:\n\techo build\n")
+
+    def test_pipeline_without_reset_passes_ppa_rule(self):
+        body = """\
+            logic [7:0] din_d1;
+
+            always_ff @(posedge clk) begin
+                din_d1 <= din;
+            end
+
+            assign dout = din_d1;
+            """
+        self.make_seq(name="pipe_mod", body=body)
+        r = run_gate(self.dir / "pipe_mod.sv", strict=True)
+        self.assertEqual(r.returncode, 0, r.stdout)
+        self.assertIn("PPA 友好", r.stdout)
+
+    def test_control_reg_without_reset_fails_strict(self):
+        body = """\
+            logic [7:0] cnt;
+
+            always_ff @(posedge clk) begin
+                cnt <= cnt + 8'h1;
+            end
+
+            assign dout = cnt;
+            """
+        self.make_seq(name="ctrl_mod", body=body)
+        r = run_gate(self.dir / "ctrl_mod.sv", strict=True)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("控制类信号 cnt 建议复位", r.stdout)
+
+    def test_lint_findings_are_reported(self):
+        self.make_good()
+        bindir = self.dir / "bin"
+        bindir.mkdir()
+        fake = bindir / "verilator"
+        fake.write_text(
+            "#!/bin/sh\n"
+            "echo '%Warning-WIDTH: simple_sync.sv:10:5: width mismatch'\n"
+            "exit 0\n", encoding="utf-8")
+        fake.chmod(0o755)
+        env = dict(os.environ, PATH=str(bindir))
+        r = run_gate(self.dir / "simple_sync.sv", strict=True, lint=True, env=env)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("LINT Warning-WIDTH", r.stdout)
+
+    def test_lint_missing_tool_fails(self):
+        self.make_good()
+        empty_bin = self.dir / "empty_bin"
+        empty_bin.mkdir()
+        env = dict(os.environ, PATH=str(empty_bin))
+        r = run_gate(self.dir / "simple_sync.sv", lint=True, env=env)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("未找到 verilator", r.stdout)
+
+    def test_lint_clean_passes(self):
+        self.make_good()
+        bindir = self.dir / "bin"
+        bindir.mkdir()
+        fake = bindir / "verilator"
+        fake.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+        fake.chmod(0o755)
+        env = dict(os.environ, PATH=str(bindir))
+        r = run_gate(self.dir / "simple_sync.sv", strict=True, lint=True, env=env)
+        self.assertEqual(r.returncode, 0, r.stdout)
+        self.assertIn("verilator lint 通过", r.stdout)
 
     def test_nested_param_allowed_but_port_expr_fails(self):
         name = "inst_test"
