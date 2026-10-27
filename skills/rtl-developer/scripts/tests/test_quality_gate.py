@@ -10,8 +10,10 @@ import unittest
 from pathlib import Path
 
 GATE = Path(__file__).resolve().parents[1] / "quality_gate.py"
+TEMPLATES = Path(__file__).resolve().parents[2] / "templates"
 
 HEADER = """\
+`default_nettype none
 //==============================================================================
 // Module : {name}
 // Description : test module
@@ -19,6 +21,12 @@ HEADER = """\
 // Parameters : {params}
 // Limitations : none
 //==============================================================================
+"""
+
+TAIL = """\
+endmodule
+
+`default_nettype wire
 """
 
 
@@ -43,27 +51,29 @@ class GateTest(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
-    def make_good(self, name="simple_sync", with_sva=True, include_sva=True):
-        header = HEADER.format(name=name, params="W - width")
-        include_block = f"""\
+    def make_module(self, name="simple_sync", body="assign dout = din;",
+                    with_sva=False, include_sva=True, ports=None,
+                    params="parameter   W = 8"):
+        ports = ports or """
+            input   logic         clk,
+            input   logic         rst_n,
+            input   logic [W-1:0] din,
+            output  logic [W-1:0] dout
+            """
+        include_block = f"""
             `ifdef SVA_ON
             `include "{name}.sva"
             `endif
             """ if include_sva else ""
-        write(self.dir / f"{name}.sv", header + f"""\
+        write(self.dir / f"{name}.sv", HEADER.format(name=name, params="W - width") + f"""
             module {name} #(
-                parameter   W = 8
+                {params}
             ) (
-                input   logic         clk,
-                input   logic         rst_n,
-                input   logic [W-1:0] din,
-                output  logic [W-1:0] dout
+                {ports}
             );
-            assign dout = din;
-
+            {body}
             {include_block}
-            endmodule
-            """)
+            """ + TAIL)
         if with_sva:
             write(self.dir / f"{name}.sva", """\
                 initial begin
@@ -72,37 +82,22 @@ class GateTest(unittest.TestCase):
                     end
                 end
                 """)
-        write(self.dir / f"{name}_tb.sv", f"module {name}_tb;\nendmodule\n")
-        write(self.dir / "Makefile", "all:\n\techo build\n")
 
-    def test_compliant_module_passes_strict(self):
-        self.make_good()
-        r = run_gate(self.dir / "simple_sync.sv", strict=True)
+    def test_compliant_module_passes_without_tb_or_makefile(self):
+        self.make_module()
+        r = run_gate(self.dir / "simple_sync.sv")
         self.assertEqual(r.returncode, 0, r.stdout)
         self.assertIn("RESULT: PASSED", r.stdout)
         self.assertNotIn("[WARN]", r.stdout)
 
     def test_assertion_in_module_fails(self):
-        self.make_good()
-        sv = self.dir / "simple_sync.sv"
-        text = sv.read_text(encoding="utf-8").replace(
-            "endmodule",
-            "assert property (@(posedge clk) din == '0);\n\nendmodule")
-        write(sv, text)
-        r = run_gate(sv)
+        self.make_module(body="assert property (@(posedge clk) din == '0);")
+        r = run_gate(self.dir / "simple_sync.sv")
         self.assertNotEqual(r.returncode, 0)
         self.assertIn("模块内不允许写断言", r.stdout)
 
     def test_hard_violations_fail(self):
-        name = "bad_rtl"
-        header = HEADER.format(name=name, params="none")
-        write(self.dir / f"{name}.sv", header + f"""\
-            module {name} (
-                input   logic       clk,
-                input   logic       rst_n,
-                input   logic [3:0] din,
-                output  logic [3:0] dout
-            );
+        self.make_module(name="bad_rtl", body="""\
             initial begin
                 dout = 4'h0;
             end
@@ -114,80 +109,38 @@ class GateTest(unittest.TestCase):
             end
 
             assign #2 dout = din;
-
-            endmodule
             """)
-        r = run_gate(self.dir / f"{name}.sv")
+        r = run_gate(self.dir / "bad_rtl.sv")
         self.assertNotEqual(r.returncode, 0)
         for msg in ("initial", "always @(", "casex", "default", "#delay"):
             self.assertIn(msg, r.stdout)
 
-    def test_missing_sva_include_target_fails(self):
-        self.make_good(with_sva=False)
+    def test_simple_module_without_sva_passes(self):
+        self.make_module(with_sva=False, include_sva=False)
         r = run_gate(self.dir / "simple_sync.sv")
-        self.assertNotEqual(r.returncode, 0)
-        self.assertIn("include 目标不存在", r.stdout)
-
-    def test_simple_module_without_sva_passes_strict(self):
-        self.make_good(with_sva=False, include_sva=False)
-        r = run_gate(self.dir / "simple_sync.sv", strict=True)
         self.assertEqual(r.returncode, 0, r.stdout)
         self.assertIn("无断言文件", r.stdout)
 
-    def test_orphan_sva_without_include_fails(self):
-        self.make_good(with_sva=True, include_sva=False)
+    def test_orphan_sva_is_warning_only(self):
+        self.make_module(with_sva=True, include_sva=False)
         r = run_gate(self.dir / "simple_sync.sv")
-        self.assertNotEqual(r.returncode, 0)
-        self.assertIn("没有用 SVA_ON include 引入", r.stdout)
-
-    def make_seq(self, name="seq_mod", body="", with_tb=True):
-        header = HEADER.format(name=name, params="none")
-        write(self.dir / f"{name}.sv", header + f"""\
-            module {name} (
-                input   logic       clk,
-                input   logic       rst_n,
-                input   logic [7:0] din,
-                output  logic [7:0] dout
-            );
-            {body}
-            endmodule
-            """)
-        if with_tb:
-            write(self.dir / f"{name}_tb.sv", f"module {name}_tb;\nendmodule\n")
-        write(self.dir / "Makefile", "all:\n\techo build\n")
-
-    def test_pipeline_without_reset_passes_ppa_rule(self):
-        body = """\
-            logic [7:0] din_d1;
-
-            always_ff @(posedge clk) begin
-                din_d1 <= din;
-            end
-
-            assign dout = din_d1;
-            """
-        self.make_seq(name="pipe_mod", body=body)
-        r = run_gate(self.dir / "pipe_mod.sv", strict=True)
         self.assertEqual(r.returncode, 0, r.stdout)
-        self.assertIn("PPA 友好", r.stdout)
-
-    def test_control_reg_without_reset_fails_strict(self):
-        body = """\
-            logic [7:0] cnt;
-
-            always_ff @(posedge clk) begin
-                cnt <= cnt + 8'h1;
-            end
-
-            assign dout = cnt;
-            """
-        self.make_seq(name="ctrl_mod", body=body)
-        r = run_gate(self.dir / "ctrl_mod.sv", strict=True)
+        self.assertIn("没有 include 它", r.stdout)
+        r = run_gate(self.dir / "simple_sync.sv", strict=True)
         self.assertNotEqual(r.returncode, 0)
-        self.assertIn("控制类信号 cnt 建议复位", r.stdout)
 
-    def test_lint_findings_are_reported(self):
-        self.make_good()
+    def test_missing_default_nettype_fails(self):
+        self.make_module()
+        sv = self.dir / "simple_sync.sv"
+        write(sv, sv.read_text(encoding="utf-8").replace(
+            "`default_nettype none", "// no nettype").replace(
+            "`default_nettype wire", "// tail"))
+        r = run_gate(sv)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("default_nettype none", r.stdout)
+
+    def test_lint_findings_are_info_only(self):
+        self.make_module()
         bindir = self.dir / "bin"
         bindir.mkdir()
         fake = bindir / "verilator"
@@ -197,73 +150,69 @@ class GateTest(unittest.TestCase):
             "exit 0\n", encoding="utf-8")
         fake.chmod(0o755)
         env = dict(os.environ, PATH=str(bindir))
-        r = run_gate(self.dir / "simple_sync.sv", strict=True, lint=True, env=env)
-        self.assertNotEqual(r.returncode, 0)
-        self.assertIn("LINT Warning-WIDTH", r.stdout)
+        r = run_gate(self.dir / "simple_sync.sv", lint=True, env=env)
+        self.assertEqual(r.returncode, 0, r.stdout)
+        self.assertIn("[INFO] LINT Warning-WIDTH", r.stdout)
 
-    def test_lint_missing_tool_fails(self):
-        self.make_good()
+    def test_lint_missing_tool_is_skipped(self):
+        self.make_module()
         empty_bin = self.dir / "empty_bin"
         empty_bin.mkdir()
         env = dict(os.environ, PATH=str(empty_bin))
         r = run_gate(self.dir / "simple_sync.sv", lint=True, env=env)
-        self.assertNotEqual(r.returncode, 0)
-        self.assertIn("未找到 verilator", r.stdout)
+        self.assertEqual(r.returncode, 0, r.stdout)
+        self.assertIn("lint 跳过", r.stdout)
 
     def test_lint_clean_passes(self):
-        self.make_good()
+        self.make_module()
         bindir = self.dir / "bin"
         bindir.mkdir()
         fake = bindir / "verilator"
         fake.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
         fake.chmod(0o755)
         env = dict(os.environ, PATH=str(bindir))
-        r = run_gate(self.dir / "simple_sync.sv", strict=True, lint=True, env=env)
+        r = run_gate(self.dir / "simple_sync.sv", lint=True, env=env)
         self.assertEqual(r.returncode, 0, r.stdout)
         self.assertIn("verilator lint 通过", r.stdout)
 
     def test_nested_param_allowed_but_port_expr_fails(self):
-        name = "inst_test"
-        header = HEADER.format(name=name, params="none")
-        write(self.dir / f"{name}.sv", header + f"""\
-            module {name} (
-                input   logic       clk,
-                input   logic       rst_n,
-                input   logic [7:0] din,
-                output  logic [7:0] dout
-            );
+        self.make_module(name="inst_test", body="""\
             dffr #(
                 .W        ($clog2(8)   ),
                 .RESET_VAL('0          )
             ) U_X (
-                .clk    (clk    ),
-                .rst_n  (rst_n  ),
-                .en     (din[0] ^ din[1]),
-                .d      (din    ),
-                .q      (dout   )
+                .clk    (clk             ),
+                .rst_n  (rst_n           ),
+                .en     (din[0] ^ din[1] ),
+                .d      (din             ),
+                .q      (dout            )
             );
-            endmodule
             """)
-        r = run_gate(self.dir / f"{name}.sv")
+        r = run_gate(self.dir / "inst_test.sv")
         self.assertNotEqual(r.returncode, 0)
         self.assertIn(".en(din[0] ^ din[1])", r.stdout)
         self.assertNotIn("$clog2", r.stdout.split("Errors:")[-1])
 
     def test_module_name_mismatch_and_marker_fail(self):
-        name = "bar_mod"
-        header = HEADER.format(name=name, params="none")
-        write(self.dir / "bar_mod.sv", header + """\
+        write(self.dir / "bar_mod.sv", HEADER.format(name="bar_mod", params="none") + """\
             module another_name (
                 input   logic clk,
                 input   logic rst_n
             );
             // @inst
-            endmodule
-            """)
+            """ + TAIL)
         r = run_gate(self.dir / "bar_mod.sv")
         self.assertNotEqual(r.returncode, 0)
         self.assertIn("模块名 another_name 与文件名 bar_mod 不一致", r.stdout)
         self.assertIn("不允许对齐标记", r.stdout)
+
+    def test_templates_pass_light_gate(self):
+        for sv in sorted(TEMPLATES.glob("*.sv")):
+            if sv.name.endswith("_tb.sv"):
+                continue
+            with self.subTest(template=sv.name):
+                r = run_gate(sv)
+                self.assertEqual(r.returncode, 0, r.stdout)
 
 
 if __name__ == "__main__":

@@ -24,11 +24,12 @@ tools: Read, Glob, Grep, Write, WebSearch
 6. **关键实现决策**：优先复用 skill 的 `templates/`（`dffr` 控制类、`dff` 数据通路、`rst_sync`、`cdc_2ff`、`fifo_sync`）；寄存器例化方式、例化连接、next 逻辑、存储体实现
 7. **时序 / PPA**：关键路径、流水线可选、面积/功耗权衡、ICG 策略；控制类寄存器复位、数据通路寄存器不复位，状态 `en = (nxt != cur)`
 8. **复位 / CDC**：异步复位经 `rst_sync` 同步释放后分发；跨时钟域同步策略（打拍/格雷码/握手/异步 FIFO），单 bit 用 `cdc_2ff`，多 bit 禁止裸 2FF
-9. **验证要点**：SVA 断言清单（按需写入 `<module>.sva`，简单子模块可省略）、参数校验范围、定向 + 随机测试场景
-10. **交付文件清单**：rtl/、tb/、`<module>.sva`（按需）、Makefile、DESIGN.md
+9. **验证要点**：SVA 断言清单（协议/FSM/CDC 才需要，简单子模块可省略）、参数校验范围（可选）、定向测试场景
+10. **交付文件清单**：`rtl/`、`<module>.sva`（按需）、`_tb.sv`（按需）、DESIGN.md；不含 Makefile 与覆盖率产物
 
 ## 边界
 
 - 只出方案，不写 RTL 实现（那是 rtl-developer 的事）
+- 只为复杂模块出方案；简单模块跳过架构阶段，直接实现
 - 方案要具体到 rtl-developer 能直接照着写，不留模糊地带
 - 有不清楚的需求先问，别猜

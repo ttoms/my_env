@@ -1,25 +1,30 @@
 #!/usr/bin/env python3
 """
-RTL 模块质量门控检查
+RTL 轻量质量门控（开发期自检）
+
+只做秒级文本检查，不依赖 EDA 工具；默认只有 error 判失败。
 
 检查项：
-  1. 文件 / 模块命名一致
-  2. 模块头注释完整性
-  3. 断言只在 .sva（按需创建），存在时通过 SVA_ON 在 endmodule 前 include
-  4. .sva 中的参数校验
-  5. 可综合性禁用项（initial / always @ / casex / force / #delay / fork 等）
-  6. case default、always 风格、复位风格
-  7. 例化实例名与端口连接规范
-  8. 对齐标记禁用
-  9. Testbench / Makefile
- 10. verilator lint（--lint，安装 verilator 时）
+  1. 文件 / 模块命名一致，一个文件一个 module
+  2. 模块头注释完整
+  3. 模块 .sv 内不写断言
+  4. 可综合性禁用项（initial / force / #delay / casex / always @）
+  5. case 必须有 default
+  6. 实例名全大写
+  7. 例化端口只连信号名 / 参数 / 常量
+  8. 无对齐标记
+  9. `default_nettype none / wire
+ 10. 存在 .sva 时必须由 SVA_ON include
 
 用法：
-  python3 quality_gate.py <rtl_file.sv> [tb_file.sv] [--strict] [--lint] [--dff-cell NAME]
+  python3 quality_gate.py <rtl.sv> [--lint] [--strict]
+
+  --lint    有 verilator 就顺带跑 lint，结果仅作 INFO，不影响 PASS/FAIL
+  --strict  warning 也视为失败（默认关闭）
 
 退出码：
-  0 - 无 error（--strict 时还要求无 warning）
-  1 - 存在 error，或 --strict 下存在 warning
+  0 - 无 error
+  1 - 存在 error（--strict 时 warning 也算）
 """
 
 import argparse
@@ -51,90 +56,39 @@ KEYWORDS = {
 }
 
 
-def strip_comments(text: str) -> str:
-    """移除 // 与 /* */ 注释，保留换行和字符串内容。"""
-    out = list(text)
-    i, n = 0, len(text)
-    in_line = in_block = in_str = False
-    while i < n:
-        c = text[i]
-        nxt = text[i + 1] if i + 1 < n else ""
-        if in_line:
-            if c == "\n":
-                in_line = False
-            else:
-                out[i] = " "
-        elif in_block:
-            if c == "*" and nxt == "/":
-                out[i] = out[i + 1] = " "
-                i += 1
-                in_block = False
-            elif c != "\n":
-                out[i] = " "
-        elif in_str:
-            if c == "\\" and i + 1 < n:
-                i += 1
-            elif c == '"':
-                in_str = False
+TOKEN_RE = re.compile(r'"(?:\\.|[^"\\])*"|//[^\n]*|/\*[\s\S]*?\*/')
+
+
+def clean(text: str, mask_str: bool = False) -> str:
+    """去掉注释；mask_str 时把字符串内容也抹掉，保留换行与位置。"""
+    out, last = [], 0
+    for m in TOKEN_RE.finditer(text):
+        out.append(text[last:m.start()])
+        tok = m.group(0)
+        if tok.startswith('"'):
+            out.append('"' + " " * (len(tok) - 2) + '"' if mask_str else tok)
         else:
-            if c == "/" and nxt == "/":
-                out[i] = out[i + 1] = " "
-                i += 1
-                in_line = True
-            elif c == "/" and nxt == "*":
-                out[i] = out[i + 1] = " "
-                i += 1
-                in_block = True
-            elif c == '"':
-                in_str = True
-        i += 1
+            out.append("".join("\n" if c == "\n" else " " for c in tok))
+        last = m.end()
+    out.append(text[last:])
     return "".join(out)
-
-
-def mask_strings(text: str) -> str:
-    """把字符串字面量内容替换为空格，保留长度与换行。"""
-    out = list(text)
-    i, n = 0, len(text)
-    in_str = False
-    while i < n:
-        c = text[i]
-        if in_str:
-            if c == "\\" and i + 1 < n:
-                out[i] = out[i + 1] = " "
-                i += 1
-            elif c == '"':
-                in_str = False
-            elif c != "\n":
-                out[i] = " "
-        elif c == '"':
-            in_str = True
-        i += 1
-    return "".join(out)
-
-
-def blank(text: str) -> str:
-    """用空格替换一段文本，保留换行以维持行号。"""
-    return "".join("\n" if ch == "\n" else " " for ch in text)
 
 
 def skip_balanced(text: str, pos: int) -> int:
     """pos 指向 '('，返回匹配 ')' 的下标；不匹配时返回文本末尾。"""
     depth = 0
-    i = pos
-    n = len(text)
-    while i < n:
+    for i in range(pos, len(text)):
         if text[i] == "(":
             depth += 1
         elif text[i] == ")":
             depth -= 1
             if depth == 0:
                 return i
-        i += 1
-    return n - 1
+    return len(text) - 1
 
 
 def remove_param_blocks(text: str) -> str:
-    """移除 #(...) 参数块（支持嵌套括号），其余内容保持原位置。"""
+    """移除 #(...) 参数块（支持嵌套括号），保留原位置。"""
     out = []
     i, n = 0, len(text)
     while i < n:
@@ -144,7 +98,7 @@ def remove_param_blocks(text: str) -> str:
                 j += 1
             if j < n and text[j] == "(":
                 k = skip_balanced(text, j)
-                out.append(blank(text[i:k + 1]))
+                out.append(re.sub(r"[^\n]", " ", text[i:k + 1]))
                 i = k + 1
                 continue
         out.append(text[i])
@@ -153,10 +107,7 @@ def remove_param_blocks(text: str) -> str:
 
 
 def find_instances(code: str):
-    """返回 [(pos, module_type, instance_name), ...]。
-
-    识别语句首的 `type [#(...)] instance (`，跳过关键字、函数调用、声明。
-    """
+    """返回 [(pos, module_type, instance_name), ...]。"""
     results = []
     for m in re.finditer(r"(?m)^[ \t]*([A-Za-z_]\w*)", code):
         w1 = m.group(1)
@@ -175,25 +126,21 @@ def find_instances(code: str):
                 while pos < n and code[pos] in " \t\r\n":
                     pos += 1
         m2 = re.match(r"([A-Za-z_]\w*)", code[pos:])
-        if not m2:
-            continue
-        w2 = m2.group(1)
-        if w2 in KEYWORDS:
+        if not m2 or m2.group(1) in KEYWORDS:
             continue
         end = pos + m2.end()
         while end < n and code[end] in " \t\r\n":
             end += 1
         if end < n and code[end] == "(":
-            results.append((m.start(1), w1, w2))
+            results.append((m.start(1), w1, m2.group(1)))
     return results
 
 
 def expr_is_connection_safe(expr: str) -> bool:
     """端口连接表达式是否只含信号名、参数名或字面常量。"""
-    e = expr.strip()
+    e = re.sub(r"\[[^\]]*\]", "", expr.strip()).strip()
     if not e:
         return True
-    e = re.sub(r"\[[^\]]*\]", "", e).strip()
     if re.fullmatch(r"[A-Za-z_]\w*", e):
         return True
     if re.fullmatch(r"[A-Za-z_]\w*::[A-Za-z_]\w*", e):
@@ -202,33 +149,27 @@ def expr_is_connection_safe(expr: str) -> bool:
         return True
     if re.fullmatch(r"-?\s*\d*'[sS]?[bBoOdDhH][0-9a-fA-F_xXzZ?]+", e):
         return True
-    if re.fullmatch(r"'[01xXzZ]", e):
-        return True
-    return False
+    return bool(re.fullmatch(r"'[01xXzZ]", e))
 
 
 class QualityGate:
-    CONTROL_SIG_RE = re.compile(
-        r"(^|_)(st|cnt|ptr|vld|rdy|en|err|ack|req|sts|state|full|empty)$")
-
-    def __init__(self, rtl_path, tb_path=None, strict=False, dff_cell=None,
-                 lint=False):
+    def __init__(self, rtl_path, strict=False, lint=False):
         self.rtl_path = Path(rtl_path)
-        self.tb_path = Path(tb_path) if tb_path else None
         self.strict = strict
-        self.dff_cell = dff_cell
         self.lint = lint
         self.errors = []
         self.warnings = []
+        self.infos = []
         self.passed = []
-        self._dff_cache = None
 
-    # ---------- 输出 ----------
     def _fail(self, msg):
         self.errors.append(msg)
 
     def _warn(self, msg):
         self.warnings.append(msg)
+
+    def _info(self, msg):
+        self.infos.append(msg)
 
     def _pass(self, msg):
         self.passed.append(msg)
@@ -241,26 +182,24 @@ class QualityGate:
         print("=" * 64)
         print(f"RTL Quality Gate: {self.rtl_path.name}")
         print("=" * 64)
-
         if not self.rtl_path.exists():
             print(f"ERROR: RTL file not found: {self.rtl_path}")
             return False
 
         raw = self.rtl_path.read_text(encoding="utf-8", errors="replace")
-        code_comments = strip_comments(raw)
-        code = mask_strings(code_comments)
+        code_comments = clean(raw)
+        code = clean(raw, mask_str=True)
 
         self._check_file_and_module(code)
         self._check_header(raw, code)
-        self._check_sva(raw, code_comments, code)
-        self._check_rtl_constructs(code)
+        self._check_default_nettype(raw)
+        self._check_assertions(code)
+        self._check_constructs(code)
         self._check_cases(code)
         self._check_instances(code)
         self._check_port_connections(code)
-        self._check_always_style(code)
-        self._check_ports(code)
         self._check_markers(raw)
-        self._check_tb_makefile()
+        self._check_sva(code_comments)
         if self.lint:
             self._run_lint()
 
@@ -270,32 +209,21 @@ class QualityGate:
         print(f"  Passed  : {len(self.passed)}")
         print(f"  Warnings: {len(self.warnings)}")
         print(f"  Errors  : {len(self.errors)}")
-
-        if self.warnings:
-            print("\nWarnings:")
-            for w in self.warnings:
-                print(f"  [WARN] {w}")
-
-        if self.errors:
-            print("\nErrors:")
-            for e in self.errors:
-                print(f"  [FAIL] {e}")
-
-        if self.passed:
-            print("\nPassed checks:")
-            for p in self.passed:
-                print(f"  [PASS] {p}")
+        for label, items in (("Info", self.infos), ("Warnings", self.warnings),
+                             ("Errors", self.errors), ("Passed checks", self.passed)):
+            if not items:
+                continue
+            print(f"\n{label}:")
+            tag = {"Info": "INFO", "Warnings": "WARN",
+                   "Errors": "FAIL", "Passed checks": "PASS"}[label]
+            for item in items:
+                print(f"  [{tag}] {item}")
 
         failed = bool(self.errors) or (self.strict and bool(self.warnings))
         print("=" * 64)
-        if failed:
-            suffix = " (STRICT)" if self.strict and not self.errors else ""
-            print(f"RESULT: FAILED{suffix}")
-            return False
-        print("RESULT: PASSED")
-        return True
+        print("RESULT: FAILED" if failed else "RESULT: PASSED")
+        return not failed
 
-    # ---------- 具体检查 ----------
     def _check_file_and_module(self, code):
         stem = self.rtl_path.stem
         if self.rtl_path.suffix != ".sv":
@@ -308,8 +236,7 @@ class QualityGate:
         mods = re.findall(r"(?m)^[ \t]*module\s+([A-Za-z_]\w*)", code)
         if len(mods) != 1:
             self._fail(f"一个文件只能有一个 module，当前 {len(mods)} 个")
-            return
-        if mods[0] != stem:
+        elif mods[0] != stem:
             self._fail(f"模块名 {mods[0]} 与文件名 {stem} 不一致")
         else:
             self._pass("模块名与文件名一致")
@@ -327,112 +254,33 @@ class QualityGate:
         else:
             self._pass("模块头注释完整")
 
-    def _has_parameters(self, code):
-        m = re.search(r"(?m)^[ \t]*module\s+\w+", code)
-        if not m:
-            return False
-        pos = m.end()
-        n = len(code)
-        while pos < n and code[pos] in " \t\r\n":
-            pos += 1
-        if pos >= n or code[pos] != "#":
-            return False
-        j = pos + 1
-        while j < n and code[j] in " \t\r\n":
-            j += 1
-        if j >= n or code[j] != "(":
-            return False
-        k = skip_balanced(code, j)
-        return bool(re.search(r"\bparameter\b", code[j + 1:k]))
-
-    def _check_sva(self, raw, code_comments, code):
-        stem = self.rtl_path.stem
-        sva_path = self.rtl_path.with_suffix(".sva")
-        has_params = self._has_parameters(code)
-
-        assert_found = bool(re.search(r"\b(assert|assume|cover|restrict)\b", code))
-        if assert_found:
-            self._fail("模块内不允许写断言，assert/assume/cover 必须放在 .sva")
-
-        includes = list(re.finditer(r'`include\s+"([^"]+)"', code_comments))
-        guarded = []
-        for m in includes:
-            before = code_comments[max(0, m.start() - 400):m.start()]
-            after = code_comments[m.end():m.end() + 400]
-            if re.search(r"`ifdef\s+SVA_ON\b", before) and re.search(r"`endif\b", after):
-                guarded.append(m)
-
-        if includes and not guarded:
-            self._fail("`include 必须由 `ifdef SVA_ON 开关控制")
-
-        if not guarded:
-            if sva_path.exists():
-                self._fail(f"存在 {sva_path.name}，但模块没有用 SVA_ON include 引入")
-            else:
-                self._pass("无断言文件（按需创建，简单模块可省略）")
-            return
-
-        if len(guarded) > 1:
-            self._warn("存在多处 SVA_ON include，建议只保留一处")
-
-        inc = guarded[0].group(1)
-        if inc != sva_path.name:
-            self._fail(f"include 文件名 {inc} 应为 {sva_path.name}")
-        target = self.rtl_path.parent / inc
-        if not target.exists():
-            self._fail(f"include 目标不存在：{inc}")
-            return
-        self._pass("SVA include 由 SVA_ON 控制")
-
-        endmod = code_comments.rfind("endmodule")
-        if endmod > guarded[0].end():
-            tail = code_comments[guarded[0].end():endmod]
-            if re.sub(r"`endif\b", "", tail).strip():
-                self._fail("SVA include 必须放在 endmodule 前的最后一段")
+    def _check_default_nettype(self, raw):
+        lines = [line.strip() for line in raw.splitlines() if line.strip()]
+        if not lines or not lines[0].startswith("`default_nettype none"):
+            self._fail("首行缺少 `default_nettype none")
+        elif lines[-1] != "`default_nettype wire":
+            self._fail("末尾缺少 `default_nettype wire")
         else:
-            self._fail("SVA include 未出现在 endmodule 之前")
+            self._pass("default_nettype 完整")
 
-        sva_raw = target.read_text(encoding="utf-8", errors="replace")
-        sva_code = mask_strings(strip_comments(sva_raw))
-        if re.search(r"(?m)^[ \t]*(module|endmodule)\b", sva_code):
-            self._fail(f"{inc} 不应包含 module/endmodule，它会被 include 进模块作用域")
-        if not re.search(r"\bassert\b|\$(fatal|error|warning)\b", sva_code):
-            self._warn(f"{inc} 中没有断言或检查")
-        if has_params and not re.search(r"\$(fatal|error)\b", sva_code):
-            self._fail(f"参数化模块的 {inc} 缺少参数校验（$fatal/$error）")
-        else:
-            self._pass("断言文件内容检查通过")
+    def _check_assertions(self, code):
+        hits = list(re.finditer(r"\b(assert|assume|cover|restrict)\b", code))
+        for m in hits[:3]:
+            self._fail(f"L{self._line(code, m.start())}: "
+                       "模块内不允许写断言，请放到同名 .sva")
+        if len(hits) > 3:
+            self._fail(f"另有 {len(hits) - 3} 处断言写在 .sv 内")
+        if not hits:
+            self._pass(".sv 内无断言")
 
-    def _dff_cells(self):
-        if self.dff_cell:
-            return [self.dff_cell]
-        if self._dff_cache is not None:
-            return self._dff_cache
-        cells = set()
-        for pat in ("*.sv", "*.v"):
-            for f in self.rtl_path.parent.glob(pat):
-                if f.resolve() == self.rtl_path.resolve():
-                    continue
-                try:
-                    text = f.read_text(encoding="utf-8", errors="replace")
-                except OSError:
-                    continue
-                mod = re.search(r"(?m)^[ \t]*module\s+(dff\w*)\b",
-                                mask_strings(strip_comments(text)))
-                if mod:
-                    cells.add(mod.group(1))
-        self._dff_cache = sorted(cells)
-        return self._dff_cache
-
-    def _check_rtl_constructs(self, code):
+    def _check_constructs(self, code):
         checks = [
-            (r"\binitial\b", "模块内禁止 initial（仿真检查/断言放 .sva）"),
+            (r"\binitial\b", "模块内禁止 initial"),
+            (r"\bforce\b|\brelease\b", "禁止 force/release"),
+            (r"(?<![\w'])#\s*\d", "禁止 #delay"),
+            (r"\bcasex\b", "禁止 casex"),
             (r"\balways\s*@", "禁止 always @(...)，改用 always_ff/always_comb"),
             (r"\balways_latch\b", "禁止 always_latch（避免 latch）"),
-            (r"\bforce\b|\brelease\b", "禁止 force/release"),
-            (r"\bfork\b|\bjoin(_any|_none)?\b", "禁止 fork-join"),
-            (r"\$random\b", "RTL 中禁止 $random"),
-            (r"(?<![\w'])#\s*\d", "禁止 #delay"),
         ]
         for pat, msg in checks:
             hits = list(re.finditer(pat, code))
@@ -443,20 +291,8 @@ class QualityGate:
             if not hits:
                 self._pass(f"未发现：{msg.split('（')[0]}")
 
-        ffs = list(re.finditer(r"\balways_ff\b", code))
-        cells = self._dff_cells()
-        if ffs and cells and not self.rtl_path.stem.startswith("dff"):
-            self._fail(f"项目存在统一 DFF 单元（{', '.join(cells)}），业务模块禁止裸 always_ff")
-        elif ffs:
-            self._pass("使用 always_ff（未发现统一 DFF 单元，允许）")
-        elif re.search(r"\balways_comb\b", code):
-            self._pass("组合逻辑使用 always_comb")
-        elif not re.search(r"\balways\b", code):
-            self._pass("纯组合/例化模块，无 always 块")
-
     def _check_cases(self, code):
-        stack = []
-        count = 0
+        stack, count = [], 0
         for m in re.finditer(r"\b(case|casez|casex|endcase)\b", code):
             tok = m.group(1)
             if tok in ("case", "casez", "casex"):
@@ -465,22 +301,15 @@ class QualityGate:
                 start, kind = stack.pop()
                 body = code[start:m.start()]
                 count += 1
-                if kind == "casex":
-                    self._fail(f"L{self._line(code, start)}: 禁止 casex")
-                elif kind == "casez":
+                if kind == "casez":
                     self._warn(f"L{self._line(code, start)}: 慎用 casez")
                 if not re.search(r"\bdefault\b", body):
                     self._fail(f"L{self._line(code, start)}: case 缺少 default 分支")
-        if count and not self.errors:
-            self._pass("case 语句检查通过")
-        elif not count:
-            self._pass("无 case 语句")
+        self._pass("case 语句检查通过" if count else "无 case 语句")
 
     def _check_instances(self, code):
-        bad = []
-        for pos, _type, inst in find_instances(code):
-            if not re.fullmatch(r"[A-Z][A-Z0-9_]*", inst):
-                bad.append((pos, inst))
+        bad = [(pos, inst) for pos, _type, inst in find_instances(code)
+               if not re.fullmatch(r"[A-Z][A-Z0-9_]*", inst)]
         for pos, inst in bad[:5]:
             self._fail(f"L{self._line(code, pos)}: 实例名 {inst} 应全大写")
         if len(bad) > 5:
@@ -493,206 +322,85 @@ class QualityGate:
         bad = []
         for m in re.finditer(r"(?<![\w\]\)])\.\s*([A-Za-z_]\w*)\s*\(", code_np):
             openp = m.end() - 1
-            closep = skip_balanced(code_np, openp)
-            expr = code_np[openp + 1:closep]
+            expr = code_np[openp + 1:skip_balanced(code_np, openp)]
             if not expr_is_connection_safe(expr):
                 bad.append((m.start(), m.group(1), " ".join(expr.split())))
         for pos, port, expr in bad[:5]:
-            self._fail(f"L{self._line(code, pos)}: .{port}({expr}) 含逻辑运算，应外部预处理为信号")
+            self._fail(f"L{self._line(code, pos)}: .{port}({expr}) 含逻辑运算，"
+                       "应外部预处理为信号")
         if len(bad) > 5:
             self._fail(f"另有 {len(bad) - 5} 处端口连接含逻辑运算")
         if not bad:
             self._pass("例化端口连接规范（无逻辑运算式）")
 
-    @staticmethod
-    def _block_body(code, pos):
-        """返回 pos 之后 begin/end 块的内容；无 begin 时返回单条语句。"""
-        m = re.search(r"\bbegin\b", code[pos:])
-        if not m:
-            semi = code.find(";", pos)
-            return code[pos:semi] if semi >= 0 else ""
-        base = pos + m.end()
-        depth = 1
-        for t in re.finditer(r"\b(begin|end)\b", code[base:]):
-            if t.group(1) == "begin":
-                depth += 1
-            else:
-                depth -= 1
-                if depth == 0:
-                    return code[base:base + t.start()]
-        return code[base:]
+    def _check_markers(self, raw):
+        hits = [name for pat, name in (
+            (r"@vlog-align", "@vlog-align"), (r"@inst\b", "@inst"),
+            (r"//\s*keep\b", "keep")) if re.search(pat, raw)]
+        if hits:
+            self._fail(f"代码中不允许对齐标记（{', '.join(hits)}），"
+                       "使用 :RtlAlign 或 scripts/align.sh 全量对齐")
+        else:
+            self._pass("无对齐标记")
 
-    def _check_always_style(self, code):
-        blocks = list(re.finditer(r"always_ff\s*@\s*\(([^)]*)\)", code))
-        if not blocks:
+    def _check_sva(self, code_comments):
+        sva_path = self.rtl_path.with_suffix(".sva")
+        if not sva_path.exists():
+            self._pass("无断言文件（按需创建）")
             return
 
-        async_cnt = sync_cnt = data_no_rst = 0
-        ctrl_no_rst = []
-        for m in blocks:
-            ev = m.group(1)
-            if "negedge" in ev:
-                async_cnt += 1
-                continue
-            if re.search(r"\brst", ev):
-                sync_cnt += 1
-                continue
-            body = self._block_body(code, m.end())
-            lhs = re.findall(r"([A-Za-z_]\w*)\s*(?:\[[^\]]*\]\s*)?<=", body)
-            ctrl = sorted({s for s in lhs if self.CONTROL_SIG_RE.search(s)})
-            if ctrl:
-                ctrl_no_rst.append((self._line(code, m.start()), ctrl))
-            else:
-                data_no_rst += 1
-
-        if async_cnt:
-            self._pass(f"使用异步复位（{async_cnt} 个 always_ff）")
-        if sync_cnt:
-            self._warn(f"{sync_cnt} 个 always_ff 使用同步复位，确认是否符合复位策略")
-        for line, sigs in ctrl_no_rst:
-            self._warn(f"L{line}: 时序块未带复位，控制类信号 {', '.join(sigs)} 建议复位")
-        if data_no_rst:
-            self._pass(f"无复位数据通路寄存器（{data_no_rst} 个 always_ff，PPA 友好）")
+        includes = re.findall(r'`include\s+"([^"]+)"', code_comments)
+        if sva_path.name not in includes:
+            self._warn(f"存在 {sva_path.name}，但模块没有 include 它")
+            return
+        guarded = False
+        for m in re.finditer(r'`include\s+"' + re.escape(sva_path.name) + r'"',
+                             code_comments):
+            before = code_comments[max(0, m.start() - 400):m.start()]
+            after = code_comments[m.end():m.end() + 400]
+            guarded = bool(re.search(r"`ifdef\s+SVA_ON\b", before)
+                           and re.search(r"`endif\b", after))
+        if not guarded:
+            self._warn(f"include {sva_path.name} 没有用 `ifdef SVA_ON 控制")
+        else:
+            self._pass("SVA include 由 SVA_ON 控制")
 
     def _run_lint(self):
         exe = shutil.which("verilator")
         if not exe:
-            self._fail("已请求 lint，但未找到 verilator（安装：brew install verilator）")
+            self._info("未找到 verilator，lint 跳过（不影响结果）")
             return
-
-        cmd = [
-            exe, "--lint-only", "-Wall", "-Wno-fatal",
-            "--top-module", self.rtl_path.stem,
-            f"-I{self.rtl_path.parent}",
-            str(self.rtl_path),
-        ]
+        cmd = [exe, "--lint-only", "-Wall", "-Wno-fatal",
+               "--top-module", self.rtl_path.stem,
+               f"-I{self.rtl_path.parent}", str(self.rtl_path)]
         try:
             proc = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
         except (OSError, subprocess.TimeoutExpired) as exc:
-            self._fail(f"lint 执行失败：{exc}")
+            self._info(f"lint 未完成：{exc}")
             return
 
         output = (proc.stdout or "") + (proc.stderr or "")
-        findings = []
-        for line in output.splitlines():
-            m = re.match(r"%(Warning|Error)-(\w+):\s*(.*)", line.strip())
-            if m:
-                findings.append((m.group(1), m.group(2), m.group(3)))
-
-        if findings:
-            for kind, code, detail in findings[:20]:
-                msg = f"LINT {kind}-{code}: {detail}"
-                if kind == "Error":
-                    self._fail(msg)
-                else:
-                    self._warn(msg)
-            if len(findings) > 20:
-                self._warn(f"另有 {len(findings) - 20} 条 lint 信息未列出")
-            return
-
-        if proc.returncode != 0:
-            tail = " ".join(output.split())[-400:]
-            self._fail(f"lint 执行异常（exit {proc.returncode}）：{tail}")
-            return
-
-        self._pass("verilator lint 通过（-Wall）")
-
-    def _module_port_text(self, code):
-        m = re.search(r"(?m)^[ \t]*module\s+\w+", code)
-        if not m:
-            return ""
-        pos = m.end()
-        n = len(code)
-        while pos < n and code[pos] in " \t\r\n":
-            pos += 1
-        if pos < n and code[pos] == "#":
-            j = pos + 1
-            while j < n and code[j] in " \t\r\n":
-                j += 1
-            if j < n and code[j] == "(":
-                pos = skip_balanced(code, j) + 1
-                while pos < n and code[pos] in " \t\r\n":
-                    pos += 1
-        if pos < n and code[pos] == "(":
-            k = skip_balanced(code, pos)
-            return code[pos + 1:k]
-        return ""
-
-    def _check_ports(self, code):
-        port_text = self._module_port_text(code)
-        if port_text.strip() and not re.search(r"\b(input|output|inout|ref)\b", port_text):
-            self._warn("使用非 ANSI 端口声明风格")
-        else:
-            self._pass("端口声明为 ANSI 风格")
-
-        bad = []
-        for m in re.finditer(r"(?m)^[ \t]*(?:input|output|inout)\b([^\n;]*)", code):
-            names = re.findall(r"([A-Za-z_]\w*)\s*(?=,|\)|$)", m.group(1))
-            if names and re.search(r"_(i|o|io)$", names[-1]):
-                bad.append((m.start(), names[-1]))
-        for pos, name in bad[:5]:
-            self._fail(f"L{self._line(code, pos)}: 端口 {name} 不应带方向后缀（_i/_o/_io）")
-        if len(bad) > 5:
-            self._fail(f"另有 {len(bad) - 5} 处端口带方向后缀")
-        if not bad:
-            self._pass("端口命名无方向后缀")
-
-    def _check_markers(self, code_comments):
-        hits = []
-        for pat, name in ((r"@vlog-align", "@vlog-align"),
-                          (r"@inst\b", "@inst"),
-                          (r"//\s*keep\b", "keep")):
-            if re.search(pat, code_comments):
-                hits.append(name)
-        if hits:
-            self._fail(f"代码中不允许对齐标记（{', '.join(hits)}），使用 :RtlAlign 全量对齐")
-        else:
-            self._pass("无对齐标记")
-
-    def _check_tb_makefile(self):
-        if self.tb_path:
-            if self.tb_path.exists():
-                self._pass("Testbench 存在")
+        findings = re.findall(r"%(Warning|Error)-(\w+):\s*(.*)", output)
+        for kind, code, detail in findings[:20]:
+            self._info(f"LINT {kind}-{code}: {detail}")
+        if len(findings) > 20:
+            self._info(f"另有 {len(findings) - 20} 条 lint 信息未列出")
+        if not findings:
+            if proc.returncode == 0:
+                self._pass("verilator lint 通过")
             else:
-                self._fail(f"Testbench 文件不存在：{self.tb_path}")
-        else:
-            stem = self.rtl_path.stem
-            dirs = [self.rtl_path.parent,
-                    self.rtl_path.parent / "tb",
-                    self.rtl_path.parent.parent / "tb",
-                    self.rtl_path.parent.parent]
-            found = None
-            for d in dirs:
-                for suffix in (".sv", ".v"):
-                    cand = d / f"{stem}_tb{suffix}"
-                    if cand.exists():
-                        found = cand
-                        break
-                if found:
-                    break
-            if found:
-                self._pass(f"Testbench 存在（{found.name}）")
-            else:
-                self._warn(f"未找到 Testbench（期望：{stem}_tb.sv）")
-
-        make_dirs = [self.rtl_path.parent, self.rtl_path.parent.parent]
-        if any((d / name).exists() for d in make_dirs for name in ("Makefile", "makefile")):
-            self._pass("Makefile 存在")
-        else:
-            self._warn("未找到 Makefile（建议添加编译仿真脚本）")
+                self._info(f"lint 退出码 {proc.returncode}，仅作参考")
 
 
 def main():
-    parser = argparse.ArgumentParser(description="RTL 质量门控检查")
+    parser = argparse.ArgumentParser(description="RTL 轻量质量门控")
     parser.add_argument("rtl", help="RTL 源文件（.sv）")
-    parser.add_argument("tb", nargs="?", help="Testbench 文件（可选）")
-    parser.add_argument("--strict", action="store_true", help="warning 也视为失败")
+    parser.add_argument("--strict", action="store_true",
+                        help="warning 也视为失败（默认关闭）")
     parser.add_argument("--lint", action="store_true",
-                        help="调用 verilator --lint-only -Wall 做语义 lint")
-    parser.add_argument("--dff-cell", default=None, help="统一 DFF 单元模块名")
+                        help="有 verilator 时顺带 lint，结果仅作 INFO")
     args = parser.parse_args()
-
-    gate = QualityGate(args.rtl, args.tb, args.strict, args.dff_cell, args.lint)
+    gate = QualityGate(args.rtl, args.strict, args.lint)
     sys.exit(0 if gate.check() else 1)
 
 

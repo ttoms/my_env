@@ -1,130 +1,99 @@
 ---
 name: rtl-developer
 description: |
-  RTL 开发编排器（SystemVerilog / Verilog）。把功能需求变成经过验证、可综合的 RTL 模块。
-  当用户说"开发/实现一个 XX 模块"、"写个 FIFO/仲裁器/同步器/总线桥"、"做 RTL"或显式调用 /rtl-developer 时触发。
-  复杂模块架构先行：架构师先出方案 → 用户确认 → 开发实现 → 验证闭环。
+  RTL 开发助手（SystemVerilog / Verilog），以开发期正向约束为主：写代码前先落命名、复位、
+  结构、接口规则，写完后跑秒级文本自检。不做商用 IP 级 EDA flow，不强制回归/覆盖率/形式化。
+  当用户说"开发/实现一个 XX 模块"、"写个 FIFO/仲裁器/同步器/总线桥"、"做 RTL"或显式调用
+  /rtl-developer 时触发。复杂模块架构先行：出方案 → 用户确认 → 实现。
 ---
 
-# RTL 开发编排器
+# RTL 开发（轻量、正向约束）
 
-你是所有 SystemVerilog RTL 开发任务的主入口。职责是**交付经过验证、可综合的代码**，不只是生成代码。
+定位：内网日常模块开发，不是商用 IP 交付。目标是 **80% 写前约束 + 20% 秒级检查**，
+不引入重型 EDA flow、不强制功能向流程产物。
 
-## 前置检查（动手前）
+## 写前 checklist（动手前逐条过）
 
-1. 读 `references/rtl-coding-standard.md`（本 skill 自带）。命名、风格、对齐、寄存器例化、`.sva` 断言、质量门控全部以它为准；可复制的参考实现见 `templates/`。
-2. 定位本 skill 根目录（SKILL.md 所在目录），质量门控脚本为 `<skill根>/scripts/quality_gate.py`。
-3. 做环境自检并把结论告诉用户：
-   - `command -v iverilog` / `command -v verilator`：决定功能仿真、SVA 回归与 lint 能力
-   - 项目是否有统一 DFF 单元（如 `dffr`）：决定寄存器例化还是 `always_ff`
-   - vim 是否加载 rtl_align（`:RtlAlign`）
-4. 依赖缺失时给降级方案，不假装能验证。当前环境没有 `rtl-architect` / `rtl-developer` / `rtl-verifier` subagent 时，按同样三个阶段内联执行或派生 `general-purpose`，**不得跳过架构确认与验证**。
+1. 模块名小写蛇形，文件名与模块名一致；一个文件一个 module
+2. 首行 `` `default_nettype none ``，末尾 `` `default_nettype wire ``
+3. 模块头注释齐全：Module / Description / Features / Parameters / Limitations
+4. 端口 ANSI 风格，无 `_i`/`_o` 方向后缀；按 clk/rst → 配置 → 输入 → 输出 → 状态排序
+5. valid-ready：`data` 与 `vld` 同周期，`vld` 不依赖 `rdy`
+6. 控制类寄存器（状态机/计数器/指针/vld/rdy/配置/错误）必须复位 → `dffr`
+7. 数据通路寄存器（流水线数据/FIFO 存储体/宽总线）不复位 → `dff`
+8. 每个寄存器都有显式 `en`：状态 `en=(nxt!=cur)`，指针/计数器用精确更新条件
+9. 例化端口只连信号名/参数/字面量，运算在外面 `assign` 预处理
+10. 实例名全大写（`U_*`）；有统一 DFF 单元时业务模块禁止裸 `always_ff`
+11. 组合逻辑 `always_comb` + 默认值；`case` 必须有 `default`
+12. 模块 `.sv` 内不写断言；需要时建同名 `.sva`，`SVA_ON` 包住并放 `endmodule` 前
+13. `.sva` 不写 `module/endmodule`；参数校验可选
+14. 代码里不加对齐标记；交付前跑 `scripts/align.sh`
+15. 禁止 `initial` / `force` / `#delay` / `casex` / `always @(...)` / `always_latch`
 
-## 核心流程（架构先行）
+## 前置（30 秒）
 
-```
-用户需求
-   │
-   ▼
-判断复杂度 ──简单──► rtl-developer 直接实现 ──► rtl-verifier 验证
-   │
-   │复杂
-   ▼
-rtl-architect 出架构方案 ──► 用户确认 ──► rtl-developer 实现 ──► rtl-verifier 验证
-```
+1. 读 `references/rtl-coding-standard.md`（命名、对齐、复位、例化、`.sva` 以此为准）
+2. 判断复杂度（见下），再决定要不要架构方案
+3. 环境：`command -v iverilog`（有则做定向仿真）、`command -v verilator`（可选，只做 lint 参考）；
+   对齐用 `scripts/align.sh`，不依赖交互式 vim
 
-### 复杂度判断（满足任一即复杂）
+## 复杂度分级
 
-- 时钟域 ≥ 2 或需要 CDC
-- 状态机状态 ≥ 4
-- 端口数 > 20
-- 寄存器/存储体 > 16
-- 参数组合 > 2，或参数空间需要范围校验
-- 多文件、总线协议、FIFO、仲裁、完整数据通路
+**简单模块**（单时钟、端口 ≤ 20、状态 < 4、无 FIFO/仲裁/协议/CDC）：
+直接实现 + 秒级自检；需要时自己写一个定向 TB 用 iverilog 跑一遍，不派生 `rtl-verifier`。
 
-否则按简单模块处理。**接口、位宽、时序、复位、吞吐任一不清楚时先问用户，不猜。**
+**复杂模块**（时钟域 ≥ 2 / CDC、状态 ≥ 4、端口 > 20、FIFO/仲裁/总线协议/完整数据通路）：
+先出架构方案（模块划分 + 框图、接口、参数表、状态机、复位/CDC、验证要点），
+用户确认后再实现。接口、位宽、时序、复位任一不清楚时先问，不猜。
 
-### 复杂模块：架构先行
+## 实现约定
 
-1. 派生 `rtl-architect` 出方案，要求包含：模块划分 + ASCII 框图、接口、参数表、状态机、关键时序/PPA、复位/CDC 策略、验证要点、交付文件清单（`rtl/`、`tb/`、`.sva`（按需）、`Makefile`、`DESIGN.md`）
-2. 把方案呈现给用户确认（架构决策权在用户，不跳过）
-3. 确认后派生 `rtl-developer` 实现
+- 优先复用 `templates/` 的基础件，而不是从零写
+- 控制/数据通路的复位策略按 checklist 第 6、7 条，这是 PPA 的核心约束
+- 状态机两段式（次态组合 + 状态寄存器），onehot，命名 `a_*_st` / `nxt_a_*_st`
+- 参数化位宽用 `$clog2` / `$bits` 派生，不手算
 
-### 简单模块：直接开发
+## 自检（秒级，不阻塞）
 
-直接派生 `rtl-developer`，附上功能需求 + 约束（位宽/深度/接口/复位）。
-
-## 验证闭环（不可省略）
-
-实现后必须派生 `rtl-verifier` 验证：
-
-1. testbench（定向 + 随机 + 自检查）
-2. 语法编译 + 仿真：
-   - 功能仿真：iverilog `-g2012`（**不定义 `SVA_ON`**）
-   - SVA 回归：verilator `--assert -DSVA_ON` 或商业仿真器
-   - iverilog 11 不支持 `assert property` 并发断言，不要用它跑 SVA
-3. 质量门控：`python3 <skill根>/scripts/quality_gate.py <rtl.sv> <tb.sv> --strict --lint`，零 error 零 warning
-   - `--lint` 调用 `verilator --lint-only -Wall` 做语义检查（位宽、多驱动、组合环、latch 等）
-   - 没有 verilator 时 `--lint` 会报错未执行：报告中必须写明“lint 未执行”，**不得声称 lint-clean**
-
-验证失败 → 把错误带回，派生 `rtl-developer` 修复 → 再验证。**绝不把未验证的代码交给用户。**
-
-## SVA 断言文件（按需）
-
-- 模块 `.sv` 内**不写任何断言**（`assert` / `assume` / `cover` / `restrict`），这条是强制的
-- `.sva` 按需创建，不要求每个模块都有：
-  - **建议创建**：接口协议/valid-ready 握手、状态机/onehot、FIFO/仲裁/指针回绕、CDC、计数器边界、关键不变量、参数范围影响正确性
-  - **可以省略**：纯组合译码/选择、单级寄存器或 DFF 包装、连线/常量模块等简单逻辑
-- 创建时使用同名 `<module>.sva`，参数校验也放在这里
-- 在 `endmodule` 前最后一段引入：
-
-```systemverilog
-`ifdef SVA_ON
-`include "fifo_sync.sva"
-`endif
+```bash
+python3 <skill根>/scripts/quality_gate.py <module>.sv
 ```
 
-- `.sva` 不带 `module` / `endmodule`，会被 include 进模块作用域，可直接引用模块内参数、端口、信号
+- 纯文本检查，零依赖，约 0.03 s
+- **默认只有 error 判失败**；warning 是建议，不阻塞
+- `--lint`（可选）：有 verilator 就顺带跑，结果只作 INFO，不影响 PASS/FAIL；没装就跳过
+- 不检查 TB / Makefile 是否存在
+- 检查 10 项：文件/模块名、头注释、断言不在 `.sv`、可综合性禁用项、`case default`、
+  实例名大写、端口连接无运算、无对齐标记、`default_nettype`、`.sva` 是否被 include
 
-## 参考模板（templates/）
+## 仿真（按需，不搞仪式）
 
-`templates/` 是可复制、已验证的基础件，优先复用而不是从零写：
-
-| 文件 | 用途 |
-|---|---|
-| `dffr.sv` | 带异步复位 + 显式 en 的控制类寄存器 |
-| `dff.sv` | 无复位、带 en 的数据通路寄存器 |
-| `rst_sync.sv` + `.sva` | 异步复位同步释放 |
-| `cdc_2ff.sv` + `.sva` | 单 bit 2FF 同步器（多 bit 必须格雷码/握手/异步 FIFO） |
-| `fifo_sync.sv` + `.sva` + `_tb.sv` + `Makefile` | 同步 FIFO 完整示例（RTL/TB/SVA/构建） |
-
-用法：复制到项目后改名、按需求调整参数；模板的 `Makefile` 提供 `lint` / `sim` / `sva` 三个目标，可作项目构建脚本的起点。模板本身已通过编译、仿真与 `--strict` 门控。
-
-## 复位与 PPA（强制）
-
-- **控制类寄存器必须复位**：状态机、计数器、指针、`vld`/`rdy`、配置、错误标志 → 用 `dffr`
-- **数据通路寄存器不复位**：流水线数据、FIFO 存储体、宽总线 → 用 `dff`，避免复位树面积与布线开销
-- 状态寄存器 `en = (nxt != cur)`；指针/计数器 `en` 为精确更新条件；每拍加载才用 `en = 1'b1` 并注释
-- 异步复位统一经 `rst_sync` 同步释放后再分发
+- 简单模块：一个定向 TB 即可
+  `iverilog -g2012 -o simv *.sv && vvp simv`
+- 有状态模块（FIFO/仲裁/FSM/CDC）：加随机激励和 scoreboard，才有必要建 `.sva`
+- 纯组合/单级寄存器/连线模块：可省略 `.sva`
+- iverilog 不支持 `assert property`；要跑并发断言用 verilator `--assert -DSVA_ON`
+- 没有 iverilog 时如实说明"未仿真"，不要声称已验证
 
 ## 对齐（强制）
 
-- 代码中**不加任何对齐标记**（`@vlog-align` / `@inst` / `keep` 一律不用）
-- 使用 rtl_align 插件的 `:RtlAlign`（普通模式，整个缓冲区）做全量对齐；插件已配置为空标记自动识别
-- 对齐规则：普通列 4 格网格、packed 维度链单空格紧凑、**逗号行尾**、末项无逗号、幂等
-- 对齐插件不可用时按规范手工对齐，并在交付说明里注明
+- 代码中不加任何对齐标记（`@vlog-align` / `@inst` / `keep` 一律不用）
+- 交付前执行 `scripts/align.sh <module>.sv`（内部 `vim -es` 调 rtl_align，全量对齐）
+- 插件不可用时按规范手工对齐，并在交付说明里注明
 
-## 硬性规范
+## 模板（templates/）
 
-- 命名/对齐/逗号行尾按 `references/rtl-coding-standard.md`
-- 文件首行 `` `default_nettype none ``、末尾 `` `default_nettype wire ``
-- 基础件优先复用 `templates/`（`dffr`/`dff`/`rst_sync`/`cdc_2ff`/`fifo_sync`）
-- 有统一 DFF 单元时寄存器一律例化，业务模块禁止裸 `always_ff`
-- 控制寄存器复位、数据通路不复位（PPA）
-- 例化端口只连信号，逻辑运算外部预处理
-- 参数校验放 `.sva`，模块文件禁止 `initial`
-- 成品代码不留任何对齐标记
+| 文件 | 用途 |
+|---|---|
+| `dffr.sv` | 控制类寄存器，异步复位 + 显式 en |
+| `dff.sv` | 数据通路寄存器，无复位 + 显式 en |
+| `rst_sync.sv` + `.sva` | 异步复位、同步释放 |
+| `cdc_2ff.sv` + `.sva` | 单 bit 2FF 同步器（多 bit 必须格雷码/握手/异步 FIFO） |
+| `fifo_sync.sv` + `.sva` + `_tb.sv` | 同步 FIFO 参考实现与定向 TB |
 
-## 状态汇报
+复制后改名、按需求调参。仿真一行命令：`iverilog -g2012 -o simv *.sv && vvp simv`。
 
-随时汇报进度：需求 → 方案（复杂模块）→ 实现 → 验证 → 交付。
+## 交付
+
+源码（`.sv`）+ 必需的 `.sva` / TB + 一句说明：做了什么、跑了什么检查、哪些没跑。
+不附带 Makefile、覆盖率报告等非模块功能向产物，除非用户明确要求。

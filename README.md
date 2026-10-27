@@ -13,15 +13,15 @@ my_env/
 │   ├── rtl_align/             # 自带 RTL 对齐插件
 │   └── vendor/                # 第三方插件最新源码 + plug.vim（离线安装用）
 ├── skills/       # Claude Code skill
-│   └── rtl-developer/          # RTL 开发编排 skill
-│       ├── SKILL.md            # 编排：架构先行 → 开发 → 验证
+│   └── rtl-developer/          # RTL 开发 skill（轻量、写前约束优先）
+│       ├── SKILL.md            # 写前 checklist + 复杂度分级 + 秒级自检
 │       ├── references/rtl-coding-standard.md   # 通用 RTL 编码规范
 │       ├── templates/          # DFF/复位同步/CDC/同步 FIFO 参考模板
-│       └── scripts/quality_gate.py             # 质量门控脚本（文本检查 + verilator lint）
+│       └── scripts/            # quality_gate.py（文本自检）+ align.sh（非交互对齐）
 ├── agents/       # Claude Code subagent
-│   ├── rtl-architect.md        # 架构师（方案）
+│   ├── rtl-architect.md        # 架构师（复杂模块方案）
 │   ├── rtl-developer.md        # 开发（实现）
-│   └── rtl-verifier.md         # 验证（TB+lint+sim+门控）
+│   └── rtl-verifier.md         # 验证（定向 TB + 仿真，按需）
 └── README.md
 ```
 
@@ -74,15 +74,16 @@ bash install.sh --offline    # 离线安装（用 vim/vendor/ 打包的插件源
 
 ## RTL 开发 skill + subagent（Claude Code）
 
-通用 RTL 开发体系：一个编排 skill + 3 个 subagent，复杂模块架构先行。
+轻量、正向约束优先的 RTL 开发体系：一个 skill + 3 个 subagent。目标是 80% 写前约束 + 20% 秒级检查，不引入商用 IP 级 EDA flow。
 
-- **skill** `skills/rtl-developer/`：编排「架构师出方案 → 用户确认 → 开发实现 → 验证闭环」，自带编码规范 + 模板库 + 质量门控脚本
-- **agent** `agents/rtl-architect.md`（架构方案）/ `rtl-developer.md`（实现）/ `rtl-verifier.md`（验证）
+- **skill** `skills/rtl-developer/`：写前 checklist（命名/复位/结构/接口/对齐）→ 按复杂度分级实现/架构先行 → 秒级自检
+- **agent** `agents/rtl-architect.md`（仅复杂模块出方案）/ `rtl-developer.md`（实现）/ `rtl-verifier.md`（按需验证）
 - **编码规范** `skills/rtl-developer/references/rtl-coding-standard.md`：命名/风格/对齐/寄存器例化/`.sva` 断言/可综合性/质量门控
-- **模板库** `skills/rtl-developer/templates/`：`dffr`（控制类复位）、`dff`（数据通路无复位）、`rst_sync`（复位同步释放）、`cdc_2ff`（单 bit CDC）、`fifo_sync`（RTL+TB+SVA+Makefile 完整示例）
+- **模板库** `skills/rtl-developer/templates/`：`dffr`（控制类复位）、`dff`（数据通路无复位）、`rst_sync`（复位同步释放）、`cdc_2ff`（单 bit CDC）、`fifo_sync`（RTL+TB+SVA）
 - **PPA 复位策略**：控制类寄存器（状态/计数/指针/valid）必须复位，数据通路寄存器不复位，减小复位树
-- **验证门控** `scripts/quality_gate.py <rtl> <tb> --strict --lint`：文本规则检查 + `verilator --lint-only -Wall`；无 verilator 时脚本报 lint 未执行，不得声称 lint-clean
-- **断言约定**：模块 `.sv` 内不写断言；需要断言时建同名 `<module>.sva`（简单模块可省略），在 `endmodule` 前由 `SVA_ON` include；代码中不加对齐标记，统一 `:RtlAlign`
+- **秒级自检** `scripts/quality_gate.py <rtl.sv>`：纯文本、零依赖、约 0.03 s；默认只有 error 判失败，`--lint` 有 verilator 才跑且仅作 INFO，不要求 TB/Makefile
+- **非交互对齐** `scripts/align.sh <rtl.sv>`：内部 `vim -es` 调用 rtl_align，agent 也能执行对齐规范
+- **断言约定**：模块 `.sv` 内不写断言；协议/FSM/CDC 才建同名 `<module>.sva`，在 `endmodule` 前由 `SVA_ON` include；代码中不加对齐标记
 
 ### 安装到 Claude Code
 

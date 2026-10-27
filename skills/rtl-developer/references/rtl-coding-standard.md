@@ -311,11 +311,11 @@ endmodule
 ```
 
 - `SVA_ON` 由仿真环境定义；综合工具不定义，断言不参与综合
-- 有 `.sva` 文件就必须 include，不允许留下未引用的孤立文件
+- 有 `.sva` 文件就应 include，避免留下未引用的孤立文件（门控发现时给 warning）
 
 ### 9.2 参数校验
 
-参数化模块的 `.sva` 应包含参数校验（时间 0 检查一次）；未建 `.sva` 的简单模块可省略：
+参数化模块的 `.sva` 可以包含参数校验（时间 0 检查一次），不强制；未建 `.sva` 的简单模块直接省略：
 
 ```systemverilog
 initial begin
@@ -362,6 +362,7 @@ end
 - vimrc 已把 `g:rtl_align_signal_marker` / `g:rtl_align_inst_marker` 设为空，插件自动识别信号声明块和例化块
 - 普通模式 `:RtlAlign` 一次处理 module 声明、信号声明块、例化块
 - 只对齐选中范围时用可视模式 `,aa`，不要为此加标记
+- 非交互场景（agent / CI）用 `scripts/align.sh <module>.sv`，内部以 `vim -es` 调用同一插件
 
 ### 13.2 规则
 
@@ -389,16 +390,22 @@ a_empty_count: assert property (
 
 ## 15. 质量门控
 
-发布前必须通过 `quality_gate.py --strict --lint`（零 error 零 warning）。脚本位置：本 skill 根目录下的 `scripts/quality_gate.py`。
+开发完成后跑一次秒级自检（零依赖、纯文本）：
 
-- `--strict`：warning 也视为失败
-- `--lint`：调用 `verilator --lint-only -Wall`，检查位宽截断、多驱动、latch、组合环、时序块阻塞赋值等门控脚本无法覆盖的语义问题
-- verilator 未安装时 lint 直接判失败；验证报告必须写“lint 未执行”，不得声称 lint-clean
-- 文本检查项：文件名/模块名一致、模块头注释、SVA_ON include 与 `.sva` 内容、参数校验、可综合性、always/case/复位风格、实例名与例化连接、对齐标记、testbench/Makefile
+```bash
+python3 <skill根>/scripts/quality_gate.py <module>.sv
+```
+
+- **默认只有 error 判失败**；warning 只是建议，不阻塞
+- `--strict` 可选，把 warning 也视为失败，仅用于需要更严的场合
+- `--lint` 可选：有 verilator 时顺带 `--lint-only -Wall`，结果只作 INFO，不影响 PASS/FAIL；没装就跳过
+- 不检查 testbench / Makefile 是否存在
+- 检查项：文件名/模块名一致、模块头注释、断言不在 `.sv`、可综合性禁用项、
+  `case default`、实例名全大写、例化端口无运算式、无对齐标记、`default_nettype`、`.sva` 是否被 include
 
 ## 16. 参考模板
 
-`templates/` 提供可直接复制的骨架，全部通过 iverilog 编译与 `quality_gate.py --strict`：
+`templates/` 提供可直接复制的骨架，全部通过 iverilog 编译与上述自检：
 
 | 文件 | 用途 |
 |---|---|
@@ -406,6 +413,7 @@ a_empty_count: assert property (
 | `dffr.sv` | 异步复位 + 显式 en 寄存器 |
 | `rst_sync.sv` / `.sva` | 异步复位、同步释放 |
 | `cdc_2ff.sv` / `.sva` | 单 bit 跨时钟域同步 |
-| `fifo_sync.sv` / `.sva` / `_tb.sv` / `Makefile` | 同步 FIFO 参考实现 |
+| `fifo_sync.sv` / `.sva` / `_tb.sv` | 同步 FIFO 参考实现与定向 TB |
 
 复制后按项目实际 DFF 单元端口名调整；模板默认 `` `default_nettype none ``。
+仿真：`iverilog -g2012 -o simv *.sv && vvp simv`。
