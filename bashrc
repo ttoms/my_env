@@ -109,6 +109,17 @@ if [ -f /etc/bash_completion ] && ! shopt -oq posix; then
     . /etc/bash_completion
 fi
 
+# ---- 重负载限内存运行 ----
+# 小内存机器（如 1.6G ECS）跑编译前必须限内存，否则整机 swap 抖动会假死。
+# 用法：hb make -j1 / hb verilator --cc ...
+hb() {
+    if command -v systemd-run >/dev/null 2>&1; then
+        systemd-run --scope --quiet -p MemoryMax=400M -p MemorySwapMax=200M nice -n 19 "$@"
+    else
+        nice -n 19 "$@"   # macOS 无 systemd
+    fi
+}
+
 # ---- 本机专属配置 ----
 # 放本机路径别名、API key 等私密/专属内容
 if [ -f ~/.bashrc_local ]; then
