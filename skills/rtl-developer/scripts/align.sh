@@ -10,7 +10,12 @@ if [ "$#" -ne 1 ]; then
 fi
 
 VIM=${VIM:-vim}
-SELF_DIR=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
+if readlink -f "$0" >/dev/null 2>&1; then
+    SELF=$(readlink -f "$0")
+else
+    SELF=$0          # macOS 自带 readlink 无 -f；软链场景靠 $HOME 候选兜底
+fi
+SELF_DIR=$(cd "$(dirname "$SELF")" && pwd)
 REPO_ROOT=$(cd "$SELF_DIR/../../.." && pwd)     # scripts → rtl-developer → skills → my_env
 
 RTP=${RTL_ALIGN_RTP:-}
