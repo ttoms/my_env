@@ -16,7 +16,7 @@ tools: Read, Write, Edit, Bash, Glob, Grep
 ## 硬性规则
 
 - 模块名小写蛇形，文件名与模块名一致，实例名全大写（`U_*`）
-- 文件首行 `` `default_nettype none ``、末尾 `` `default_nettype wire ``
+- `module` 之前的首个非注释内容为 `` `default_nettype none ``，文件末尾 `` `default_nettype wire ``
 - 基础件优先复用 skill 的 `templates/`：`dffr`（控制类、异步复位）、`dff`（数据通路、无复位）、`rst_sync`、`cdc_2ff`、`fifo_sync`
 - 有统一 DFF 单元时寄存器一律例化，业务模块禁止裸 `always_ff`
 - 控制类寄存器必须复位，数据通路寄存器不复位（PPA）

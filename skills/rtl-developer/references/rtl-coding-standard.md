@@ -134,7 +134,7 @@ endmodule
 
 信号声明顺序与逻辑赋值顺序一致。
 
-文件首行写 `` `default_nettype none ``，末尾写 `` `default_nettype wire ``，避免隐式网络掩盖拼写错误。参考 `templates/` 下的模板。
+在 `module` 之前（允许先放版权/模块头注释）写 `` `default_nettype none ``，文件末尾写 `` `default_nettype wire ``，避免隐式网络掩盖拼写错误。参考 `templates/` 下的模板。
 
 ### 4.2 模块头注释（每个文件顶部必须有）
 
