@@ -2,6 +2,7 @@
 """quality_gate.py 回归测试（不依赖 iverilog / verilator）。"""
 
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -10,7 +11,9 @@ import unittest
 from pathlib import Path
 
 GATE = Path(__file__).resolve().parents[1] / "quality_gate.py"
+ALIGN = Path(__file__).resolve().parents[1] / "align.sh"
 TEMPLATES = Path(__file__).resolve().parents[2] / "templates"
+PLUGIN = Path(__file__).resolve().parents[4] / "vim" / "rtl_align"
 
 HEADER = """\
 `default_nettype none
@@ -139,6 +142,14 @@ class GateTest(unittest.TestCase):
         self.assertNotEqual(r.returncode, 0)
         self.assertIn("default_nettype none", r.stdout)
 
+    def test_leading_comment_before_default_nettype_passes(self):
+        self.make_module()
+        sv = self.dir / "simple_sync.sv"
+        sv.write_text("// Copyright (c) 2026\n" + sv.read_text(encoding="utf-8"),
+                      encoding="utf-8")
+        r = run_gate(sv)
+        self.assertEqual(r.returncode, 0, r.stdout)
+
     def test_lint_findings_are_info_only(self):
         self.make_module()
         bindir = self.dir / "bin"
@@ -153,6 +164,21 @@ class GateTest(unittest.TestCase):
         r = run_gate(self.dir / "simple_sync.sv", lint=True, env=env)
         self.assertEqual(r.returncode, 0, r.stdout)
         self.assertIn("[INFO] LINT Warning-WIDTH", r.stdout)
+
+    def test_lint_error_without_code_is_reported(self):
+        self.make_module()
+        bindir = self.dir / "bin"
+        bindir.mkdir()
+        fake = bindir / "verilator"
+        fake.write_text(
+            "#!/bin/sh\n"
+            "echo '%Error: Cannot find file: missing.sv'\n"
+            "exit 1\n", encoding="utf-8")
+        fake.chmod(0o755)
+        env = dict(os.environ, PATH=str(bindir))
+        r = run_gate(self.dir / "simple_sync.sv", lint=True, env=env)
+        self.assertEqual(r.returncode, 0, r.stdout)
+        self.assertIn("[INFO] LINT Error: Cannot find file", r.stdout)
 
     def test_lint_missing_tool_is_skipped(self):
         self.make_module()
@@ -205,6 +231,24 @@ class GateTest(unittest.TestCase):
         self.assertNotEqual(r.returncode, 0)
         self.assertIn("模块名 another_name 与文件名 bar_mod 不一致", r.stdout)
         self.assertIn("不允许对齐标记", r.stdout)
+
+    @unittest.skipUnless(shutil.which("vim") and
+                         (PLUGIN / "plugin" / "rtl_align.vim").is_file(),
+                         "vim / rtl_align 插件不可用")
+    def test_align_script_restores_template(self):
+        src = TEMPLATES / "fifo_sync.sv"
+        dst = self.dir / "fifo_sync.sv"
+        source_text = src.read_text(encoding="utf-8")
+        scrambled = source_text.replace("input   logic", "input logic", 1)
+        self.assertNotEqual(scrambled, source_text)
+        dst.write_text(scrambled, encoding="utf-8")
+
+        env = dict(os.environ, HOME=str(self.dir / "home"))
+        env.pop("RTL_ALIGN_RTP", None)
+        r = subprocess.run(["bash", str(ALIGN), str(dst)],
+                           capture_output=True, text=True, env=env)
+        self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
+        self.assertEqual(dst.read_text(encoding="utf-8"), source_text)
 
     def test_templates_pass_light_gate(self):
         for sv in sorted(TEMPLATES.glob("*.sv")):

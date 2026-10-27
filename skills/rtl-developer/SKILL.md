@@ -15,7 +15,7 @@ description: |
 ## 写前 checklist（动手前逐条过）
 
 1. 模块名小写蛇形，文件名与模块名一致；一个文件一个 module
-2. 首行 `` `default_nettype none ``，末尾 `` `default_nettype wire ``
+2. `module` 之前的首个非注释内容为 `` `default_nettype none ``，文件末尾为 `` `default_nettype wire ``
 3. 模块头注释齐全：Module / Description / Features / Parameters / Limitations
 4. 端口 ANSI 风格，无 `_i`/`_o` 方向后缀；按 clk/rst → 配置 → 输入 → 输出 → 状态排序
 5. valid-ready：`data` 与 `vld` 同周期，`vld` 不依赖 `rdy`

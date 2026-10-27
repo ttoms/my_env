@@ -192,7 +192,7 @@ class QualityGate:
 
         self._check_file_and_module(code)
         self._check_header(raw, code)
-        self._check_default_nettype(raw)
+        self._check_default_nettype(code)
         self._check_assertions(code)
         self._check_constructs(code)
         self._check_cases(code)
@@ -254,11 +254,11 @@ class QualityGate:
         else:
             self._pass("模块头注释完整")
 
-    def _check_default_nettype(self, raw):
-        lines = [line.strip() for line in raw.splitlines() if line.strip()]
-        if not lines or not lines[0].startswith("`default_nettype none"):
-            self._fail("首行缺少 `default_nettype none")
-        elif lines[-1] != "`default_nettype wire":
+    def _check_default_nettype(self, code):
+        body = code.strip()
+        if not body.startswith("`default_nettype none"):
+            self._fail("module 之前缺少 `default_nettype none")
+        elif not body.endswith("`default_nettype wire"):
             self._fail("末尾缺少 `default_nettype wire")
         else:
             self._pass("default_nettype 完整")
@@ -380,9 +380,10 @@ class QualityGate:
             return
 
         output = (proc.stdout or "") + (proc.stderr or "")
-        findings = re.findall(r"%(Warning|Error)-(\w+):\s*(.*)", output)
+        findings = re.findall(r"%(Warning|Error)(?:-(\w+))?:\s*(.*)", output)
         for kind, code, detail in findings[:20]:
-            self._info(f"LINT {kind}-{code}: {detail}")
+            tag = f"{kind}-{code}" if code else kind
+            self._info(f"LINT {tag}: {detail}")
         if len(findings) > 20:
             self._info(f"另有 {len(findings) - 20} 条 lint 信息未列出")
         if not findings:
