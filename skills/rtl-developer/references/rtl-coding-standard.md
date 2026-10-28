@@ -351,7 +351,9 @@ end
 
 ## 10. 可综合性
 
-禁止：`initial` 块（`.sva` 内的仿真检查除外）、`force/release`、`#delay`、`fork-join`、动态/关联数组、`class`、`$random`（RTL 中）、`casex`。
+禁止：`initial` 块（`.sva` 内的仿真检查除外）、`force/release`、`#delay`、`fork-join`、动态/关联数组、`class`、`string`、`real`、`while`、`$random`（RTL 中）、`casex`。
+
+**唯一例外**：latch 型 ICG 行为模型可以在 `always_latch` 同一行加 `// gate: allow-latch`，门控按行豁免；其他模块不得使用 `always_latch`。
 
 仿真专用代码用 `` `ifdef SVA_ON `` / `` `ifndef SYNTHESIS `` 隔离。
 

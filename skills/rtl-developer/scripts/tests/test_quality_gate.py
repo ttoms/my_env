@@ -140,6 +140,28 @@ class GateTest(unittest.TestCase):
         self.assertNotEqual(r.returncode, 0)
         self.assertIn("禁止 while", r.stdout)
 
+    def test_latch_exemption_line(self):
+        body = """\
+            logic en_l;
+            always_latch begin  // gate: allow-latch
+                if (!clk) begin
+                    en_l = din[0];
+                end
+            end
+            assign dout = {W{en_l}};
+            """
+        self.make_module(name="latch_mod", body=body)
+        sv = self.dir / "latch_mod.sv"
+        r = run_gate(sv)
+        self.assertEqual(r.returncode, 0, r.stdout)
+        self.assertIn("已按行豁免", r.stdout)
+
+        sv.write_text(sv.read_text(encoding="utf-8").replace(
+            "  // gate: allow-latch", ""), encoding="utf-8")
+        r = run_gate(sv)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("禁止 always_latch", r.stdout)
+
     def test_nonconst_div_is_warning_only(self):
         self.make_module(name="div_mod", body="assign dout = din % din;")
         r = run_gate(self.dir / "div_mod.sv")

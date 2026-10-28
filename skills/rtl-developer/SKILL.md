@@ -50,7 +50,7 @@ RTL 不是指令序列，是硬件结构图。写每一行前先回答三个问�
 12. 模块 `.sv` 内不写断言；需要时建同名 `.sva`，`SVA_ON` 包住并放 `endmodule` 前
 13. `.sva` 不写 `module/endmodule`；参数校验可选
 14. 代码里不加对齐标记；交付前跑 `scripts/align.sh`
-15. 禁止 `initial` / `force` / `#delay` / `casex` / `always @(...)` / `always_latch`
+15. 禁止 `initial` / `force` / `#delay` / `casex` / `always @(...)` / `always_latch`（唯一例外：`icg` 行为模型可在同行加 `// gate: allow-latch`）
 
 ## 前置（30 秒）
 
