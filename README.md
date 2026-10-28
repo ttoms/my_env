@@ -90,13 +90,11 @@ bash install.sh --offline    # 离线安装（用 vim/vendor/ 打包的插件源
 把 skill 和 agents 软链进 Claude Code 配置目录（`~/.claude/`）：
 
 ```bash
-# skill（目录软链）
-ln -sf "$PWD/skills/rtl-developer" ~/.claude/skills/rtl-developer
-# agents（文件软链）
-ln -sf "$PWD/agents/rtl-architect.md"  ~/.claude/agents/rtl-architect.md
-ln -sf "$PWD/agents/rtl-developer.md"  ~/.claude/agents/rtl-developer.md
-ln -sf "$PWD/agents/rtl-verifier.md"   ~/.claude/agents/rtl-verifier.md
+bash bootstrap.sh
 ```
+
+脚本会建立 `~/.claude/skills/rtl-developer` 和三个 `~/.claude/agents/rtl-*.md` 软链；
+如果目标已存在且不是软链，会报错退出，不会覆盖真实目录/文件。
 
 （本仓库用 `CC/skills`、`CC/agents` 软链到 `~/.claude/`，各机器按自己目录结构调整。）
 

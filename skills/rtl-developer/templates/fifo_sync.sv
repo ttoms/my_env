@@ -6,6 +6,7 @@
 //   - 参数化位宽/深度，DEPTH 必须为 2 的幂且 >= 2
 //   - valid-ready 接口
 //   - 控制状态用 dffr，存储体用 dff（无复位）
+//   - full/empty 由状态寄存器输出，不在输出端做组合译码
 // Parameters :
 //   DATA_W - 数据位宽，默认 32
 //   DEPTH  - 深度，默认 16（2 的幂）
@@ -44,22 +45,31 @@ logic [PTR_W -1:0]  nxt_rd_ptr      ;
 logic               wr_en           ;
 logic               rd_en           ;
 logic               entry_vld_en    ;
+logic               empty_q         ;
+logic               full_q          ;
+logic               nxt_empty       ;
+logic               nxt_full        ;
 
 assign wr_en        = wr_vld && wr_rdy;
 assign rd_en        = rd_vld && rd_rdy;
-assign wr_rdy       = ~full;
-assign rd_vld       = ~empty;
-assign empty        = ~|entry_vld;
-assign full         = &entry_vld;
+assign wr_rdy       = ~full_q;
+assign rd_vld       = ~empty_q;
+assign empty        = empty_q;
+assign full         = full_q;
 assign nxt_wr_ptr   = wr_ptr + 1'b1;
 assign nxt_rd_ptr   = rd_ptr + 1'b1;
 assign entry_vld_en = wr_en | rd_en;
 
 // 独热掩码：一个解码器代替每项一个比较器；写优先于同拍读同一项
+// （CBB 项目中可用 bin2ohot 模块替代这里的移位）
 assign wr_oh        = {{(DEPTH-1){1'b0}}, 1'b1} << wr_ptr;
 assign rd_oh        = {{(DEPTH-1){1'b0}}, 1'b1} << rd_ptr;
 assign nxt_entry_vld = (entry_vld & ~(rd_en ? rd_oh : '0))
                      | (wr_en ? wr_oh : '0);
+
+// full/empty 由寄存器输出，且与 entry_vld 同一拍更新
+assign nxt_empty = ~|nxt_entry_vld;
+assign nxt_full  = &nxt_entry_vld;
 
 always_comb begin
     rd_data = mem[rd_ptr];
@@ -96,6 +106,28 @@ dffr #(
     .en     (entry_vld_en   ),
     .d      (nxt_entry_vld  ),
     .q      (entry_vld      )
+);
+
+dffr #(
+    .W          (1      ),
+    .RESET_VAL  (1'b1   )
+) U_EMPTY (
+    .clk    (clk            ),
+    .rst_n  (rst_n          ),
+    .en     (entry_vld_en   ),
+    .d      (nxt_empty      ),
+    .q      (empty_q        )
+);
+
+dffr #(
+    .W          (1      ),
+    .RESET_VAL  (1'b0   )
+) U_FULL (
+    .clk    (clk            ),
+    .rst_n  (rst_n          ),
+    .en     (entry_vld_en   ),
+    .d      (nxt_full       ),
+    .q      (full_q         )
 );
 
 generate
