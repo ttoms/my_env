@@ -288,7 +288,9 @@ dffr #(
 ### 7.4 存储体
 
 - 用 DFF 数组例化（generate 循环），不用 `always_ff` 写 RAM
+- **寄存器阵列声明用 packed 二维数组**（如 `logic [DEPTH-1:0][W-1:0] mem`），不用传统 unpacked 数组 `logic [W-1:0] mem [DEPTH]`；packed 数组是一根向量，切片/拼接/层次化都更直接
 - 存储体用无复位 `dff`，避免为每位数据接复位
+- 写使能优先用独热掩码（`1 << ptr`），不要每项一个 `ptr == i` 比较器
 - 大深度建议专用 SRAM，并按工艺库要求包装（读写时序、时钟门控、BIST）
 
 ## 8. 例化连接规则

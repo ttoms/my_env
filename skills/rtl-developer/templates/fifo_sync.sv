@@ -31,10 +31,12 @@ module fifo_sync #(
 
 localparam int PTR_W = $clog2(DEPTH);
 
-logic [DATA_W-1:0] mem [DEPTH];
+logic [DEPTH-1:0][DATA_W-1:0] mem;
 
 logic [DEPTH -1:0]  entry_vld       ;
 logic [DEPTH -1:0]  nxt_entry_vld   ;
+logic [DEPTH -1:0]  wr_oh           ;
+logic [DEPTH -1:0]  rd_oh           ;
 logic [PTR_W -1:0]  wr_ptr          ;
 logic [PTR_W -1:0]  rd_ptr          ;
 logic [PTR_W -1:0]  nxt_wr_ptr      ;
@@ -53,15 +55,11 @@ assign nxt_wr_ptr   = wr_ptr + 1'b1;
 assign nxt_rd_ptr   = rd_ptr + 1'b1;
 assign entry_vld_en = wr_en | rd_en;
 
-always_comb begin
-    nxt_entry_vld = entry_vld;
-    if (rd_en) begin
-        nxt_entry_vld[rd_ptr] = 1'b0;
-    end
-    if (wr_en) begin
-        nxt_entry_vld[wr_ptr] = 1'b1;
-    end
-end
+// 独热掩码：一个解码器代替每项一个比较器；写优先于同拍读同一项
+assign wr_oh        = {{(DEPTH-1){1'b0}}, 1'b1} << wr_ptr;
+assign rd_oh        = {{(DEPTH-1){1'b0}}, 1'b1} << rd_ptr;
+assign nxt_entry_vld = (entry_vld & ~(rd_en ? rd_oh : '0))
+                     | (wr_en ? wr_oh : '0);
 
 always_comb begin
     rd_data = mem[rd_ptr];
@@ -104,7 +102,7 @@ generate
     for (genvar i = 0; i < DEPTH; i++) begin : gen_mem
         logic entry_wr_en;
 
-        assign entry_wr_en = wr_en && (wr_ptr == PTR_W'(i));
+        assign entry_wr_en = wr_en && wr_oh[i];
 
         dff #(
             .W  (DATA_W )
