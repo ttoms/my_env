@@ -118,6 +118,37 @@ class GateTest(unittest.TestCase):
         for msg in ("initial", "always @(", "casex", "default", "#delay"):
             self.assertIn(msg, r.stdout)
 
+    def test_software_types_fail(self):
+        for name, body in (("string_sig", "string note;"),
+                           ("real_sig", "real ratio;")):
+            with self.subTest(case=name):
+                self.make_module(name=name, body=body)
+                r = run_gate(self.dir / f"{name}.sv")
+                self.assertNotEqual(r.returncode, 0)
+                self.assertIn("软件类型", r.stdout)
+
+    def test_dynamic_array_and_while_fail(self):
+        self.make_module(name="dyn_mod", body="logic [7:0] q[$];")
+        r = run_gate(self.dir / "dyn_mod.sv")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("动态数组/队列", r.stdout)
+
+        self.make_module(
+            name="while_mod",
+            body="always_comb begin while (1'b1) begin dout = din; end end")
+        r = run_gate(self.dir / "while_mod.sv")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("禁止 while", r.stdout)
+
+    def test_nonconst_div_is_warning_only(self):
+        self.make_module(name="div_mod", body="assign dout = din % din;")
+        r = run_gate(self.dir / "div_mod.sv")
+        self.assertEqual(r.returncode, 0, r.stdout)
+        self.assertIn("[WARN]", r.stdout)
+        self.assertIn("除法/取模", r.stdout)
+        r = run_gate(self.dir / "div_mod.sv", strict=True)
+        self.assertNotEqual(r.returncode, 0)
+
     def test_simple_module_without_sva_passes(self):
         self.make_module(with_sva=False, include_sva=False)
         r = run_gate(self.dir / "simple_sync.sv")

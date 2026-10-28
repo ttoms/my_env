@@ -8,13 +8,15 @@ RTL 轻量质量门控（开发期自检）
   1. 文件 / 模块命名一致，一个文件一个 module
   2. 模块头注释完整
   3. 模块 .sv 内不写断言
-  4. 可综合性禁用项（initial / force / #delay / casex / always @）
+  4. 可综合性禁用项（initial / force / #delay / casex / always @ /
+     always_latch / class / string / real / 动态数组 / while）
   5. case 必须有 default
   6. 实例名全大写
   7. 例化端口只连信号名 / 参数 / 常量
   8. 无对齐标记
   9. `default_nettype none / wire
  10. 存在 .sva 时必须由 SVA_ON include
+ 11. 非常量除法/取模的硬件代价提示（warning，不阻塞）
 
 用法：
   python3 quality_gate.py <rtl.sv> [--lint] [--strict]
@@ -195,6 +197,7 @@ class QualityGate:
         self._check_default_nettype(code)
         self._check_assertions(code)
         self._check_constructs(code)
+        self._check_hw_cost(code)
         self._check_cases(code)
         self._check_instances(code)
         self._check_port_connections(code)
@@ -281,6 +284,10 @@ class QualityGate:
             (r"\bcasex\b", "禁止 casex"),
             (r"\balways\s*@", "禁止 always @(...)，改用 always_ff/always_comb"),
             (r"\balways_latch\b", "禁止 always_latch（避免 latch）"),
+            (r"\b(class|string|real|shortreal)\b",
+             "禁止 class/string/real 等软件类型"),
+            (r"\[\s*\$\s*\]", "禁止动态数组/队列（[$]）"),
+            (r"\bwhile\b", "禁止 while（无界循环，无法映射为固定硬件）"),
         ]
         for pat, msg in checks:
             hits = list(re.finditer(pat, code))
@@ -290,6 +297,25 @@ class QualityGate:
                 self._fail(f"另有 {len(hits) - 3} 处：{msg}")
             if not hits:
                 self._pass(f"未发现：{msg.split('（')[0]}")
+
+    def _check_hw_cost(self, code):
+        """非常量除法/取模会综合成昂贵的除法器；只提示，不阻塞。"""
+        pat = re.compile(
+            r"(?<![\w'])[A-Za-z_]\w*(?:\s*\[[^\]]*\])?\s*[/%]\s*[A-Za-z_]\w*")
+        hits = []
+        for no, line in enumerate(code.splitlines(), 1):
+            if re.search(r"\b(parameter|localparam|input|output|inout)\b", line):
+                continue
+            if re.search(r"\b(logic|wire|reg|bit)\s*\[", line):
+                continue
+            for m in pat.finditer(line):
+                hits.append((no, m.group(0).strip()))
+        for no, expr in hits[:5]:
+            self._warn(f"L{no}: {expr} 可能是非常量除法/取模，确认综合代价")
+        if len(hits) > 5:
+            self._warn(f"另有 {len(hits) - 5} 处除法/取模，确认操作数是否为常量")
+        if not hits:
+            self._pass("无疑似非常量除法/取模")
 
     def _check_cases(self, code):
         stack, count = [], 0
