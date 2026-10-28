@@ -55,7 +55,7 @@ class GateTest(unittest.TestCase):
         self.tmp.cleanup()
 
     def make_module(self, name="simple_sync", body="assign dout = din;",
-                    with_sva=False, include_sva=True, ports=None,
+                    with_sva=False, include_sva=False, ports=None,
                     params="parameter   W = 8"):
         ports = ports or """
             input   logic         clk,
@@ -184,6 +184,35 @@ class GateTest(unittest.TestCase):
         self.assertIn("没有 include 它", r.stdout)
         r = run_gate(self.dir / "simple_sync.sv", strict=True)
         self.assertNotEqual(r.returncode, 0)
+
+    def test_missing_sva_include_target_fails(self):
+        self.make_module(name="no_sva", include_sva=True)
+        r = run_gate(self.dir / "no_sva.sv")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("找不到文件", r.stdout)
+
+    def test_split_sva_layout_passes(self):
+        name = "split_mod"
+        (self.dir / "rtl" / "basic").mkdir(parents=True)
+        (self.dir / "sva" / "basic").mkdir(parents=True)
+        write(self.dir / "rtl" / "basic" / f"{name}.sv",
+              HEADER.format(name=name, params="none") + f"""\
+                  module {name} (
+                      input  logic a,
+                      output logic y
+                  );
+                  assign y = a;
+                  `ifdef SVA_ON
+                  `include "{name}.sva"
+                  `endif
+                  endmodule
+                  `default_nettype wire
+                  """)
+        write(self.dir / "sva" / "basic" / f"{name}.sva",
+              'initial begin if (1\'b0) $fatal(1, "x"); end\n')
+        r = run_gate(self.dir / "rtl" / "basic" / f"{name}.sv")
+        self.assertEqual(r.returncode, 0, r.stdout)
+        self.assertIn("SVA include 由 SVA_ON 控制", r.stdout)
 
     def test_missing_default_nettype_fails(self):
         self.make_module()

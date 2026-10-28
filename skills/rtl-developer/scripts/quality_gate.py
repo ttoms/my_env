@@ -15,7 +15,7 @@ RTL 轻量质量门控（开发期自检）
   7. 例化端口只连信号名 / 参数 / 常量
   8. 无对齐标记
   9. `default_nettype none / wire
- 10. 存在 .sva 时必须由 SVA_ON include
+ 10. 存在 .sva 时必须由 SVA_ON include（查找同目录、sva/<category>/、sva/）
  11. 非常量除法/取模的硬件代价提示（warning，不阻塞）
 
 用法：
@@ -387,13 +387,30 @@ class QualityGate:
         else:
             self._pass("无对齐标记")
 
+    def _sva_paths(self):
+        """`.sva` 查找顺序：RTL 同目录 → sva/<category>/ → sva/。"""
+        stem = self.rtl_path.stem
+        rtl_dir = self.rtl_path.parent
+        root = rtl_dir.parent.parent      # rtl/<category> 的项目根
+        return [
+            self.rtl_path.with_suffix(".sva"),
+            root / "sva" / rtl_dir.name / f"{stem}.sva",
+            root / "sva" / f"{stem}.sva",
+        ]
+
     def _check_sva(self, code_comments):
-        sva_path = self.rtl_path.with_suffix(".sva")
-        if not sva_path.exists():
-            self._pass("无断言文件（按需创建）")
+        expected = f"{self.rtl_path.stem}.sva"
+        sva_path = next((p for p in self._sva_paths() if p.exists()), None)
+        includes = re.findall(r'`include\s+"([^"]+)"', code_comments)
+
+        if sva_path is None:
+            if expected in includes:
+                self._fail(f"include {expected} 但找不到文件"
+                           "（查找了同目录、sva/<category>/、sva/）")
+            else:
+                self._pass("无断言文件（按需创建）")
             return
 
-        includes = re.findall(r'`include\s+"([^"]+)"', code_comments)
         if sva_path.name not in includes:
             self._warn(f"存在 {sva_path.name}，但模块没有 include 它")
             return

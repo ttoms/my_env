@@ -47,7 +47,7 @@ RTL 不是指令序列，是硬件结构图。写每一行前先回答三个问�
 9. 例化端口只连信号名/参数/字面量，运算在外面 `assign` 预处理
 10. 实例名全大写（`U_*`）；有统一 DFF 单元时业务模块禁止裸 `always_ff`
 11. 组合逻辑 `always_comb` + 默认值；`case` 必须有 `default`
-12. 模块 `.sv` 内不写断言；需要时建同名 `.sva`，`SVA_ON` 包住并放 `endmodule` 前
+12. 模块 `.sv` 内不写断言；需要时建同名 `.sva`（项目采用 `rtl/<category>/` 布局时放 `sva/<category>/`），`SVA_ON` 包住并放 `endmodule` 前
 13. `.sva` 不写 `module/endmodule`；参数校验可选
 14. 代码里不加对齐标记；交付前跑 `scripts/align.sh`
 15. 禁止 `initial` / `force` / `#delay` / `casex` / `always @(...)` / `always_latch`（唯一例外：`icg` 行为模型可在同行加 `// gate: allow-latch`）

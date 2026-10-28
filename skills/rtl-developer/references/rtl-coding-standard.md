@@ -314,7 +314,8 @@ dffr #(.W(W), .RESET_VAL('0)) U_CNT (.clk(clk), .rst_n(rst_n), .en(cnt_en), .d(n
 - `.sva` **按需创建**，不要求每个模块都有：
   - 建议创建：接口协议/valid-ready 握手、状态机、FIFO/仲裁/指针回绕、CDC、计数器边界、关键不变量、参数范围影响正确性
   - 可以省略：纯组合译码/选择、单级寄存器或 DFF 包装、连线/常量模块等简单逻辑
-- 有断言需求时，建一个同名 `.sva` 文件，与 `.sv` 同目录，例如 `fifo_sync.sva`
+- 有断言需求时，建一个同名 `.sva` 文件：项目有 `rtl/<category>/` 结构时放 `sva/<category>/<module>.sva`（与 `rtl/` 并列）；否则与 `.sv` 同目录
+- 编译/仿真时把 `.sva` 所在目录加入 include path，例如 `verilator ... -I sva/<category>`；门控查找顺序为同目录 → `sva/<category>/` → `sva/`
 - `.sva` 不带 `module` / `endmodule`，它会被 include 到模块作用域，可直接引用模块参数、端口和内部信号
 - 在 `endmodule` 前最后一段引入，由 `SVA_ON` 宏开关：
 
