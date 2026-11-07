@@ -289,6 +289,11 @@ dffr #(
 
 - 用 DFF 数组例化（generate 循环），不用 `always_ff` 写 RAM
 - **寄存器阵列声明用 packed 二维数组**（如 `logic [DEPTH-1:0][W-1:0] mem`），不用传统 unpacked 数组 `logic [W-1:0] mem [DEPTH]`；packed 数组是一根向量，切片/拼接/层次化都更直接
+- **多路子向量一律用 packed 二维数组**：凡是按 `x[i*W +: W]` 取第 `i` 路的信号（端口、内部信号、函数形参都算），一律声明成 `logic [N-1:0][W-1:0]`，使用处直接写 `x[i]`，禁止手写 `x[i*W +: W]`
+  - packed 数组在比特层面仍是 `N*W` 位的一根向量：接 `dffr` / `dff` 的 `[W-1:0]` 端口、跨模块连扁平端口、整体赋值、拼接都无需转换
+  - 反例 `logic [N*W-1:0] qos` + `qos[i*W +: W]`；正例 `logic [N-1:0][W-1:0] qos` + `qos[i]`
+  - 只整根使用、从不按路索引的信号保持扁平即可，不要为形式统一强行升维
+  - **iverilog 限制**：二维 packed 数组的**非恒定二级索引**（`x[i][j]`，`i`/`j` 为循环变量）会报 "Array index expressions must be constant"。遇到时先算到行临时变量再整体赋值：`row = '0; row[j] = ...; x[i] = row;`；单级索引 `x[i]` 无此限制
 - 存储体用无复位 `dff`，避免为每位数据接复位
 - FIFO 的 `full` / `empty` 由状态的下一拍译码后寄存输出，不要直接对 `entry_vld` 做组合译码
 - 写使能优先用独热掩码（`1 << ptr`），不要每项一个 `ptr == i` 比较器
